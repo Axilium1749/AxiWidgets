@@ -1,0 +1,142 @@
+<Window x:Class="AxiWidgets.GalleryWindow" x:ClassModifier="internal"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="AxiWidgets — Widget Gallery" Width="1000" Height="520"
+        WindowStyle="None" ResizeMode="NoResize" ShowInTaskbar="False" Topmost="True"
+        Background="Transparent" Foreground="White" FontFamily="Segoe UI Variable, Segoe UI"
+        FontSize="13" UseLayoutRounding="True" SnapsToDevicePixels="True">
+    <Window.Resources>
+        <SolidColorBrush x:Key="Muted" Color="#A6FFFFFF"/>
+        <Style x:Key="FlatButton" TargetType="Button">
+            <Setter Property="Cursor" Value="Hand"/>
+            <Setter Property="Foreground" Value="White"/>
+            <Setter Property="Background" Value="Transparent"/>
+            <Setter Property="BorderThickness" Value="0"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Button">
+                        <Border x:Name="Surface" Background="{TemplateBinding Background}" CornerRadius="8" Padding="{TemplateBinding Padding}">
+                            <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True"><Setter TargetName="Surface" Property="Opacity" Value="0.86"/></Trigger>
+                            <Trigger Property="IsPressed" Value="True"><Setter TargetName="Surface" Property="Opacity" Value="0.65"/></Trigger>
+                            <Trigger Property="IsKeyboardFocused" Value="True"><Setter TargetName="Surface" Property="BorderBrush" Value="White"/><Setter TargetName="Surface" Property="BorderThickness" Value="1"/></Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+        <Style x:Key="PreviewButton" TargetType="Button" BasedOn="{StaticResource FlatButton}">
+            <Setter Property="Margin" Value="0,0,12,0"/>
+            <Setter Property="VerticalAlignment" Value="Top"/>
+        </Style>
+        <Style x:Key="AppearanceSlider" TargetType="Slider">
+            <Setter Property="Template"><Setter.Value>
+                <ControlTemplate TargetType="Slider">
+                    <Grid Height="24" Background="Transparent">
+                        <Border Background="#55555E" Height="4" CornerRadius="2" Margin="6,0"/>
+                        <Track x:Name="PART_Track" Minimum="{TemplateBinding Minimum}" Maximum="{TemplateBinding Maximum}" Value="{TemplateBinding Value}">
+                            <Track.DecreaseRepeatButton><RepeatButton Command="Slider.DecreaseLarge" Focusable="False"><RepeatButton.Template><ControlTemplate TargetType="RepeatButton"><Border Background="#0A64D6" Height="4" CornerRadius="2"/></ControlTemplate></RepeatButton.Template></RepeatButton></Track.DecreaseRepeatButton>
+                            <Track.Thumb><Thumb Width="14" Height="14"><Thumb.Template><ControlTemplate TargetType="Thumb"><Ellipse Fill="White" Stroke="#0A64D6" StrokeThickness="2"/></ControlTemplate></Thumb.Template></Thumb></Track.Thumb>
+                            <Track.IncreaseRepeatButton><RepeatButton Command="Slider.IncreaseLarge" Focusable="False"><RepeatButton.Template><ControlTemplate TargetType="RepeatButton"><Border Background="Transparent"/></ControlTemplate></RepeatButton.Template></RepeatButton></Track.IncreaseRepeatButton>
+                        </Track>
+                    </Grid>
+                </ControlTemplate>
+            </Setter.Value></Setter>
+        </Style>
+    </Window.Resources>
+    <Border x:Name="Surface" Background="#CE202024">
+        <Grid Margin="20">
+            <Grid.ColumnDefinitions><ColumnDefinition Width="180"/><ColumnDefinition Width="20"/><ColumnDefinition Width="*"/><ColumnDefinition Width="20"/><ColumnDefinition Width="220"/></Grid.ColumnDefinitions>
+            <StackPanel>
+                <Border Background="#3A3A3E" CornerRadius="8" Height="33">
+                    <Grid Margin="12,0">
+                        <TextBlock x:Name="SearchPlaceholder" Text="Search widgets" Foreground="{StaticResource Muted}" VerticalAlignment="Center" IsHitTestVisible="False"/>
+                        <TextBox x:Name="Search" AutomationProperties.Name="Search widgets" BorderThickness="0" Background="Transparent" Foreground="White" CaretBrush="White" VerticalContentAlignment="Center" Padding="0" TextChanged="SearchChanged"/>
+                    </Grid>
+                </Border>
+                <Button x:Name="ClockCategory" Style="{StaticResource FlatButton}" Background="#0A64D6" Height="47" Margin="0,20,0,0" Click="SelectClock">
+                    <StackPanel Orientation="Horizontal" Width="152">
+                        <TextBlock Text="&#x1F552;" FontFamily="Segoe UI Emoji" Margin="0,0,14,0"/>
+                        <TextBlock Text="Clock"/>
+                    </StackPanel>
+                </Button>
+            </StackPanel>
+            <Grid Grid.Column="2">
+                <Grid.RowDefinitions><RowDefinition Height="*"/><RowDefinition Height="Auto"/></Grid.RowDefinitions>
+                <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
+                    <StackPanel>
+                        <TextBlock Text="Clock" FontSize="22" FontWeight="SemiBold" Margin="0,0,0,5"/>
+                        <TextBlock Text="The time here, simply digital. Add a clock with or without seconds." Foreground="{StaticResource Muted}" TextWrapping="Wrap"/>
+                        <WrapPanel x:Name="Previews" Margin="0,22,0,0">
+                            <Button x:Name="DigitalPreview" Style="{StaticResource PreviewButton}" Click="AddDigital" AutomationProperties.Name="Add Digital Clock" ToolTip="Add Digital Clock">
+                                <StackPanel Width="232">
+                                    <Grid Margin="5,0,5,0">
+                                        <Border Background="#72202024" BorderBrush="#3A3A3E" BorderThickness="1" CornerRadius="16" Width="216" Height="115" Margin="5,5,0,0">
+                                            <StackPanel VerticalAlignment="Center">
+                                                <TextBlock x:Name="MinutesPreview" Text="12:00" FontSize="39" FontWeight="Light" HorizontalAlignment="Center"/>
+                                                <TextBlock x:Name="DatePreview" Text="Wednesday, 28 October" FontSize="10" Foreground="{StaticResource Muted}" HorizontalAlignment="Center" Margin="0,3,0,0"/>
+                                            </StackPanel>
+                                        </Border>
+                                        <Border Background="#2FA94F" Width="20" Height="20" CornerRadius="10" HorizontalAlignment="Left" VerticalAlignment="Top">
+                                            <TextBlock Text="+" FontSize="20" FontWeight="SemiBold" HorizontalAlignment="Center" Margin="0,-5,0,0"/>
+                                        </Border>
+                                    </Grid>
+                                    <TextBlock Text="Digital" HorizontalAlignment="Center" Foreground="{StaticResource Muted}" FontSize="12" FontWeight="SemiBold" Margin="0,14,0,0"/>
+                                </StackPanel>
+                            </Button>
+                            <Button x:Name="SecondsButton" Style="{StaticResource PreviewButton}" Click="AddSeconds" AutomationProperties.Name="Add Clock with seconds" ToolTip="Add Clock with seconds">
+                                <StackPanel Width="232">
+                                    <Grid Margin="5,0,5,0">
+                                        <Border Background="#72202024" BorderBrush="#3A3A3E" BorderThickness="1" CornerRadius="16" Width="216" Height="115" Margin="5,5,0,0">
+                                            <StackPanel VerticalAlignment="Center">
+                                                <TextBlock x:Name="SecondsPreview" Text="12:00:00" FontSize="34" FontWeight="Light" HorizontalAlignment="Center"/>
+                                                <TextBlock x:Name="SecondsDatePreview" Text="Wednesday, 28 October" FontSize="10" Foreground="{StaticResource Muted}" HorizontalAlignment="Center" Margin="0,3,0,0"/>
+                                            </StackPanel>
+                                        </Border>
+                                        <Border Background="#2FA94F" Width="20" Height="20" CornerRadius="10" HorizontalAlignment="Left" VerticalAlignment="Top">
+                                            <TextBlock Text="+" FontSize="20" FontWeight="SemiBold" HorizontalAlignment="Center" Margin="0,-5,0,0"/>
+                                        </Border>
+                                    </Grid>
+                                    <TextBlock Text="With seconds" HorizontalAlignment="Center" Foreground="{StaticResource Muted}" FontSize="12" FontWeight="SemiBold" Margin="0,14,0,0"/>
+                                </StackPanel>
+                            </Button>
+                        </WrapPanel>
+                        <TextBlock x:Name="EmptySearch" Text="No widgets found" Foreground="{StaticResource Muted}" Margin="0,24,0,0" Visibility="Collapsed"/>
+                        <TextBlock x:Name="AddedStatus" Foreground="{StaticResource Muted}" Margin="0,16,0,0" AutomationProperties.LiveSetting="Polite"/>
+                    </StackPanel>
+                </ScrollViewer>
+                <Grid Grid.Row="1" Margin="0,20,0,0">
+                    
+                    <TextBlock Text="Click a preview to add it · drag widgets to move them · right-click a widget for settings" TextWrapping="Wrap" Foreground="{StaticResource Muted}" VerticalAlignment="Center" Margin="0,0,20,0"/>
+                    
+                </Grid>
+            </Grid>
+            <Grid Grid.Column="4">
+                <Grid.RowDefinitions><RowDefinition Height="*"/><RowDefinition Height="Auto"/></Grid.RowDefinitions>
+                <Border Background="#302F2F35" BorderBrush="#3A3A40" BorderThickness="1" CornerRadius="10" Padding="14" VerticalAlignment="Top">
+                    <StackPanel>
+                        <TextBlock Text="Global appearance" FontWeight="SemiBold" Margin="0,0,0,4"/>
+                        <TextBlock Text="Applies to all widgets" Foreground="{StaticResource Muted}" FontSize="11" Margin="0,0,0,12"/>
+                        <DockPanel Margin="0,4,0,3">
+                            <TextBlock x:Name="BlurValue" DockPanel.Dock="Right" Foreground="{StaticResource Muted}" TextAlignment="Right"/>
+                            <TextBlock Text="Blur"/>
+                        </DockPanel>
+                        <Slider x:Name="BlurSlider" Style="{StaticResource AppearanceSlider}" Minimum="0" Maximum="1" TickFrequency="1" IsSnapToTickEnabled="True" SmallChange="1" LargeChange="1" ValueChanged="BlurChanged" AutomationProperties.Name="Native blur off or on"/>
+                        <TextBlock Text="Off / Native blur" FontSize="11" Foreground="{StaticResource Muted}" Margin="0,3,0,0"/>
+                        <DockPanel Margin="0,12,0,3">
+                            <TextBlock x:Name="TransparencyValue" DockPanel.Dock="Right" Foreground="{StaticResource Muted}" TextAlignment="Right"/>
+                            <TextBlock Text="Transparency"/>
+                        </DockPanel>
+                        <Slider x:Name="TransparencySlider" Style="{StaticResource AppearanceSlider}" Minimum="0" Maximum="95" TickFrequency="1" IsSnapToTickEnabled="True" SmallChange="1" LargeChange="5" ValueChanged="TransparencyChanged" AutomationProperties.Name="Widget background transparency"/>
+                        <TextBlock Text="Text stays fully visible" Foreground="{StaticResource Muted}" FontSize="11" Margin="0,6,0,0"/>
+                    </StackPanel>
+                </Border>
+<Button x:Name="DoneButton" Grid.Row="1" Width="76" HorizontalAlignment="Right" Style="{StaticResource FlatButton}" Background="#0A64D6" Height="33" FontWeight="SemiBold" Content="Done" Click="DoneClicked"/>
+            </Grid>
+        </Grid>
+    </Border>
+</Window>
+
+

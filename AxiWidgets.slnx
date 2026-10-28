@@ -1,0 +1,9 @@
+<Solution>
+  <Folder Name="/src/">
+    <Project Path="src/AxiWidgets.Core/AxiWidgets.Core.csproj" />
+    <Project Path="src/AxiWidgets/AxiWidgets.csproj" />
+  </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/AxiWidgets.Tests/AxiWidgets.Tests.csproj" />
+  </Folder>
+</Solution>
