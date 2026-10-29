@@ -27,7 +27,7 @@ internal sealed class WidgetDrawing
         for(int i=0;i<42;i++){float x=26+i%7*44,y=174+i/7*29;var day=days[i];if(day.Today)d.C(0,x+5,y+1,34,27,Orange,6);d.Text(cal.GetDayOfMonth(day.Date).ToString(culture),x,y,44,29,14,day.CurrentMonth?White:0x65FFFFFF,2);}
         return d;
     }
-    internal static WidgetDrawing Reminders(IReadOnlyList<ReminderItem> items,int offset)
+    internal static WidgetDrawing Reminders(IReadOnlyList<ReminderItem> items,int offset,string? draft=null,int caret=0)
     {
         var d=new WidgetDrawing();d.Base(Yellow);d.Panel(16,18,332,58);
         d.C(0,26,29,34,34,Yellow,17);for(int i=0;i<3;i++)d.Line(37,40+i*5,i==2?7:12,0,0xFF252525,2);
@@ -44,7 +44,8 @@ internal sealed class WidgetDrawing
             if(row<3&&offset+row+1<items.Count)d.Line(29,y+51,306,0);
         }
         if(items.Count>4){float h=196f*4/items.Count,y=98+(196-h)*offset/(items.Count-4);d.C(0,341,y,2,h,0x60FFFFFF,1);}
-        d.Panel(18,322,328,45);d.Text("+",34,322,26,45,28,Yellow);d.Line(70,334,0,21,Muted,1);d.Text("Add a reminder",84,322,240,45,15,Muted);
+        if(draft!=null){caret=Math.Clamp(caret,0,draft.Length);int start=Math.Max(0,caret-28);draft=draft[start..].Insert(caret-start,"│");}
+        d.Panel(18,322,328,45);d.Text("+",34,322,26,45,28,Yellow);d.Text(draft==null?"Add a reminder":draft,76,322,258,45,15,draft==null?Muted:White);
         return d;
     }
 }

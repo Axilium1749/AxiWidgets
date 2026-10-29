@@ -64,8 +64,8 @@ Check("reminders persistence order completion removal and empty input",()=>{
     try{
         var store=new ReminderStore(path);if(store.Add("   "))throw new Exception("Empty task added");
         store.Add("  Первая задача  ");store.Add("Second");var id=store.Items[0].Id;store.Toggle(id);
-        var loaded=new ReminderStore(path);Equal(2,loaded.Items.Count);if(loaded.Items[0].Text!="Первая задача"||!loaded.Items[0].Done||loaded.Items[0].Id!=id)throw new Exception("Round trip failed");
-        loaded.Toggle(id);if(loaded.Items[0].Done)throw new Exception("Reactivate failed");loaded.Remove(loaded.Items[1].Id);
+        var loaded=new ReminderStore(path);Equal(2,loaded.Items.Count);if(loaded.Items[1].Text!="Первая задача"||!loaded.Items[1].Done||loaded.Items[1].Id!=id)throw new Exception("Round trip failed");
+        loaded.Toggle(id);if(loaded.Items.Find(x=>x.Id==id)!.Done)throw new Exception("Reactivate failed");loaded.Remove(loaded.Items.Find(x=>x.Id!=id)!.Id);
         loaded=new ReminderStore(path);Equal(1,loaded.Items.Count);if(loaded.Items[0].Id!=id)throw new Exception("Wrong task deleted");
     }finally{if(File.Exists(path))File.Delete(path);if(Directory.Exists(folder))Directory.Delete(folder);}
 });
@@ -73,4 +73,13 @@ Check("widget kinds preserve old clock layouts",()=>{
     if(System.Text.Json.JsonSerializer.Deserialize<ClockState>("{}")!.Kind!="Clock")throw new Exception("Legacy kind");
     foreach(var kind in new[]{"Clock","Calendar","Reminders"}){var original=new ClockState{Kind=kind};var round=System.Text.Json.JsonSerializer.Deserialize<ClockState>(System.Text.Json.JsonSerializer.Serialize(original))!;if(round.Kind!=kind||round.Id!=original.Id)throw new Exception("Widget kind lost");}
 });
-Console.WriteLine($"{passed}/25 passed");
+Check("reminders active first and newest completion first",()=>{
+    var folder=Path.Combine(Path.GetTempPath(),"AxiWidgets-order-"+Guid.NewGuid());var path=Path.Combine(folder,"tasks.json");
+    try{var store=new ReminderStore(path);store.Add("A");store.Add("B");store.Add("C");var a=store.Items[0].Id;var b=store.Items[1].Id;
+        store.Toggle(a);store.Toggle(b);if(string.Join("",store.Items.Select(x=>x.Text))!="CBA")throw new Exception("Completion order");
+        store.Add("D");if(string.Join("",store.Items.Select(x=>x.Text))!="CDBA")throw new Exception("New task placement");
+        var loaded=new ReminderStore(path);if(string.Join("",loaded.Items.Select(x=>x.Text))!="CDBA")throw new Exception("Saved order");
+        loaded.Toggle(b);if(string.Join("",loaded.Items.Select(x=>x.Text))!="CDBA"||loaded.Items[2].Done)throw new Exception("Reactivate placement");
+    }finally{if(File.Exists(path))File.Delete(path);if(Directory.Exists(folder))Directory.Delete(folder);}
+});
+Console.WriteLine($"{passed}/26 passed");

@@ -98,7 +98,7 @@ internal sealed partial class ClockWindow
         timer.Stop();var now=DateTime.Now;
         if(State.Kind!="Clock") {
             scroll=Math.Clamp(scroll,0,Math.Max(0,manager.Reminders.Items.Count-4));
-            var drawing=State.Kind=="Calendar"?WidgetDrawing.Calendar(now):WidgetDrawing.Reminders(manager.Reminders.Items,scroll);
+            var drawing=State.Kind=="Calendar"?WidgetDrawing.Calendar(now):WidgetDrawing.Reminders(manager.Reminders.Items,scroll,input?.Text,input?.SelectionStart??0);
             NativeCard.Check(NativeCard.SetContent(Handle,drawing.Commands.ToArray(),drawing.Commands.Count));
             if(State.Kind=="Calendar"){timer.Interval=new DateTimeOffset(now.Date.AddDays(1))-new DateTimeOffset(now);timer.Start();}return;
         }
@@ -150,6 +150,8 @@ internal sealed partial class ClockWindow
                     if((flags&4)==0)Marshal.WriteIntPtr(message.LParam,IntPtr.Size,1);
                 }
                 switch(message.Msg){
+                case 0x111:if(owner.input!=null&&message.LParam==owner.input.Handle){Native.SendMessageTimeout(message.LParam,0x2111,message.WParam,message.LParam,2,1000,out _);message.Result=0;return;}break;
+                case 0x6:if(((long)message.WParam&0xffff)==0)owner.EndInput();break;
                 case 0x201:if(owner.Editing)owner.BeginDrag();else owner.ReminderClick();break;
                 case 0x20A:owner.Scroll(unchecked((short)((long)message.WParam>>16)));message.Result=0;return;
                 case 0x84:if(!owner.Editing&&owner.State.Kind=="Reminders"&&!owner.InteractivePoint()){message.Result=-1;return;}break;

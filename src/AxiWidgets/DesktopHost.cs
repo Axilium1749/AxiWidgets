@@ -21,6 +21,8 @@ internal static class Native
     [DllImport("user32.dll",SetLastError=true)] [return: MarshalAs(UnmanagedType.Bool)]
     internal static extern bool SetWindowCompositionAttribute(nint hwnd,ref CompositionData data);
     [DllImport("user32.dll")] internal static extern nint GetForegroundWindow();
+    [DllImport("user32.dll")] internal static extern nint SetFocus(nint hwnd);
+    [DllImport("user32.dll")] internal static extern nint GetFocus();
     [DllImport("user32.dll")] internal static extern bool SetForegroundWindow(nint hwnd);
     [DllImport("user32.dll",CharSet=CharSet.Unicode)] internal static extern nint FindWindow(string cls,string? title);
     [DllImport("user32.dll",CharSet=CharSet.Unicode)] internal static extern nint FindWindowEx(nint parent,nint after,string? cls,string? title);
