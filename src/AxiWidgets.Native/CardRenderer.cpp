@@ -18,6 +18,8 @@
 #include <memory>
 #include <vector>
 #include <map>
+#include <set>
+#include <chrono>
 #include <unordered_map>
 
 using namespace winrt;
@@ -100,7 +102,50 @@ struct Card
     ContainerVisual root{nullptr};CompositionDrawingSurface surface{nullptr};CompositionSurfaceBrush textBrush{nullptr};
     CompositionColorBrush tint{nullptr},border{nullptr};
     CompositionLineGeometry vertical{nullptr},horizontal{nullptr};CompositionSpriteShape verticalShape{nullptr},horizontalShape{nullptr};
+    struct Row {SpriteVisual visual{nullptr};CompositionDrawingSurface surface{nullptr};float y{},dpi{};};
+    std::map<std::wstring,Row> rows;
+    ContainerVisual viewport{nullptr},scroller{nullptr};float scrollTarget=0;bool listReady=false;
     std::wstring time,date;
+    void Animate(Visual const& visual,wchar_t const* property,float value,int duration){
+        auto animation=renderer->compositor.CreateScalarKeyFrameAnimation();
+        animation.Duration(std::chrono::milliseconds(duration));
+        animation.InsertExpressionKeyFrame(0,L"this.StartingValue");
+        animation.InsertKeyFrame(1,value,renderer->compositor.CreateCubicBezierEasingFunction({.2f,.8f},{.2f,1.f}));
+        visual.StartAnimation(property,animation);
+    }
+    void SetCommands(std::vector<DrawCommand> const& incoming){
+        std::vector<DrawCommand> background;std::set<std::wstring> active;
+        for(size_t i=0;i<incoming.size();i++){
+            auto const& cmd=incoming[i];
+            if(cmd.kind==6){
+                if(!viewport){
+                    auto c=renderer->compositor;viewport=c.CreateContainerVisual();viewport.Size({width,height});
+                    auto clip=c.CreateRectangleClip();clip.Left(27);clip.Top(92);clip.Right(337);clip.Bottom(300);viewport.Clip(clip);
+                    scroller=c.CreateContainerVisual();scroller.Size({width,height});viewport.Children().InsertAtTop(scroller);root.Children().InsertAtTop(viewport);
+                }
+                float next=-cmd.y;
+                if(!listReady)scroller.Offset({0,next,0});
+                else if(next!=scrollTarget)Animate(scroller,L"Offset.Y",next,210);
+                scrollTarget=next;continue;
+            }
+            if(cmd.kind!=4){background.push_back(cmd);continue;}
+            std::wstring id(cmd.text);active.insert(id);bool fresh=rows.find(id)==rows.end();auto& row=rows[id];
+            if(fresh){auto c=renderer->compositor;row.visual=c.CreateSpriteVisual();row.visual.Size({width,52});scroller.Children().InsertAtTop(row.visual);}
+            if(!row.surface||row.dpi!=scale){row.dpi=scale;row.surface=renderer->graphics.CreateDrawingSurface({width*scale,52*scale},Windows::Graphics::DirectX::DirectXPixelFormat::B8G8R8A8UIntNormalized,Windows::Graphics::DirectX::DirectXAlphaMode::Premultiplied);row.visual.Brush(renderer->compositor.CreateSurfaceBrush(row.surface));}
+            std::vector<DrawCommand> content;
+            while(++i<incoming.size()&&incoming[i].kind!=5){auto local=incoming[i];local.y-=cmd.y;content.push_back(local);}
+            auto savedSurface=surface;auto savedCommands=std::move(commands);surface=row.surface;commands=std::move(content);
+            try{Draw();}catch(...){surface=savedSurface;commands=std::move(savedCommands);throw;}
+            surface=savedSurface;commands=std::move(savedCommands);
+            if(fresh){
+                row.visual.Offset({0,cmd.y-(listReady&&cmd.color?38.f:0.f),0});
+                if(listReady&&cmd.color){row.visual.Opacity(0);Animate(row.visual,L"Offset.Y",cmd.y,320);Animate(row.visual,L"Opacity",1,220);}
+            }else if(row.y!=cmd.y)Animate(row.visual,L"Offset.Y",cmd.y,320);
+            row.y=cmd.y;
+        }
+        for(auto it=rows.begin();it!=rows.end();){if(!active.count(it->first)){scroller.Children().Remove(it->second.visual);it=rows.erase(it);}else ++it;}
+        commands=std::move(background);Draw();if(viewport)listReady=true;
+    }
     ~Card(){if(target)target.Root(nullptr);if(hwnd&&IsWindow(hwnd))DestroyWindow(hwnd);}
     void Create(float w=300,float h=160){
         width=w;height=h;
@@ -184,5 +229,5 @@ extern "C" __declspec(dllexport) HRESULT __cdecl AxiCard_CreateWidget(HWND* resu
     return Guard([&]{if(!renderer)renderer=std::make_unique<Renderer>();auto card=std::make_unique<Card>();card->Create(width,height);*result=card->hwnd;cards.emplace(card->hwnd,std::move(card));});
 }
 extern "C" __declspec(dllexport) HRESULT __cdecl AxiCard_SetContent(HWND hwnd,DrawCommand const* commands,int count) noexcept {
-    return Guard([&]{if(count<0||count>1000||(!commands&&count))throw hresult_invalid_argument();auto& card=GetCard(hwnd);card.commands.assign(commands,commands+count);card.Draw();});
+    return Guard([&]{if(count<0||count>1000||(!commands&&count))throw hresult_invalid_argument();auto& card=GetCard(hwnd);card.SetCommands(std::vector<DrawCommand>(commands,commands+count));});
 }

@@ -211,7 +211,7 @@ internal sealed class Manager : IDisposable
             FinishEditing();
             if(Native.IsWindowEnabled(windows[widgetStart].Handle)||!Native.IsWindowEnabled(windows[^1].Handle))throw new Exception("Widget normal input policy failed");
             windows[^1].SmokeReminderInput();
-            var created=Reminders.Items[^1].Id;
+            var created=Reminders.Items[0].Id;
             Reminders.Toggle(created);if(!new ReminderStore(Path.Combine(Log.Folder,"reminders.json")).Items.Single(x=>x.Id==created).Done)throw new Exception("Task state not saved");
             Reminders.Toggle(created);Reminders.Remove(created);
             windows[^1].SmokeReminderActions();

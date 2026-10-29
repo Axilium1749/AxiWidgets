@@ -100,7 +100,7 @@ internal sealed partial class ClockWindow
         Native.GetCursorPos(out var saved);var r=Native.Bounds(Handle);double scale=r.Width/WidgetWidth;
         var added=new System.Collections.Generic.List<Guid>();
         try {
-            for(int i=0;i<6;i++){manager.Reminders.Add("Scroll test "+i);added.Add(manager.Reminders.Items[^1].Id);}
+            for(int i=0;i<6;i++){manager.Reminders.Add("Scroll test "+i);added.Add(manager.Reminders.Items[0].Id);}
             for(int i=0;i<manager.Reminders.Items.Count;i++)Scroll(-120);
             if(scroll!=manager.Reminders.Items.Count-4)throw new InvalidOperationException("Scroll range failed");
             var id=manager.Reminders.Items[scroll].Id;
