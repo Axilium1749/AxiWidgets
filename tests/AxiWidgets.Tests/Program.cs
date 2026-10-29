@@ -119,5 +119,17 @@ Check("reverse wheel stays responsive during rubber return",()=>{
     var physics=new ScrollPhysics();physics.Resize(200);physics.Wheel(120,0);physics.Step(.016);
     if(!physics.Wheel(-120,.02))throw new Exception("Reverse input blocked");
 });
-Console.WriteLine($"{passed}/31 passed");
+Check("reverse input escapes spring target and continues inside list",()=>{
+    foreach(int side in new[]{-1,1}){
+        var physics=new ScrollPhysics();physics.Resize(1200);physics.Jump(side<0?0:1200);
+        physics.Wheel(side<0?120:-120,0);
+        for(int i=0;i<35;i++)physics.Step(.008);
+        double position=physics.Position;physics.Wheel(side<0?-120:120,.28);
+        if(physics.Position!=position)throw new Exception("Reverse input jumped position");
+        for(int i=0;i<2000&&physics.Moving;i++)physics.Step(.008);
+        if(side<0?physics.Position<15:physics.Position>1185)throw new Exception("Old spring recaptured scroll");
+        if(physics.Moving)throw new Exception("Reverse scroll did not stop");
+    }
+});
+Console.WriteLine($"{passed}/32 passed");
 
