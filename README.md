@@ -1,78 +1,65 @@
 # AxiWidgets
 
-Windows 11 desktop clocks with a C# / .NET 10 / WPF manager and C++/WinRT Windows Composition cards. One process, independent clocks, live backdrop blur, magnetic alignment and portable JSON persistence. No Python or browser runtime.
+Native glass widgets for the Windows desktop: Clock, Calendar and Reminders.
+A C# / .NET 10 / WPF manager hosts C++/WinRT Windows Composition cards in one process.
 
-The user confirmed the native Composition prototype works with Wallpaper Engine. Desktop clocks now use that renderer; the existing WPF gallery and menus are retained. The gallery uses an opaque dark background and system-rounded corners. See [validation](docs/validation.md) for earlier host checks.
+## Requirements
 
-## Build and run
+- Windows 11 x64. Live backdrop composition uses Windows 11 APIs; behavior on other Windows builds and wallpaper renderers needs testing.
+- 64-bit Windows PowerShell 5.1 or PowerShell 7 for building.
+- Internet access for the first toolchain download, and approximately 4 GB of free disk space.
 
-Requires Windows x64 and .NET SDK **10.0.403**. The workspace SDK is isolated in `.tools/dotnet` and ignored by Git. A fresh checkout requires the official SDK installed globally or placed there.
+## Build from a clean clone
 
-The native build also uses the local MSVC 14.44 and Windows SDK 10.0.26100 toolchain under `.tools/native-toolchain`. `src/AxiWidgets.Native/Build.ps1` defines its paths; MSBuild builds and copies the DLL automatically. No separate widget process is started.
+Run from the repository root:
 
 ```powershell
+./scripts/Bootstrap.ps1
 ./build.ps1 -Test
 ./build.ps1 -Run
 ```
 
-To open the gallery immediately on launch:
+Bootstrap downloads Microsoft .NET SDK 10.0.403, MSVC 14.44 and Windows SDK 10.0.26100 packages into ignored `.tools/`. Versions, download URLs and SHA-256/SHA-512 checksums are pinned in [toolchain.lock.json](scripts/toolchain.lock.json). Every cached package is checked before extraction. The script installs no global SDK and changes no system PATH, registry or shell settings. Microsoft's license terms apply to downloaded tools; their binaries are not part of this repository.
+
+Downloads are cached in `.tools/downloads/`. To reuse a previously downloaded cache, use `./scripts/Bootstrap.ps1 -DownloadCache C:\path\to\cache`. After bootstrap, application restore and build work offline: the managed projects have no external NuGet package dependencies. `global.json` requires the pinned SDK. Native compilation runs automatically as part of the managed build.
+
+Output: `src/AxiWidgets/bin/Release/net10.0-windows/AxiWidgets.exe`, with its managed and native dependencies. Keep the complete output directory together. To launch it directly:
 
 ```powershell
-$env:DOTNET_ROOT="$PWD/.tools/dotnet"
+$env:DOTNET_ROOT = Join-Path $PWD '.tools/dotnet'
 ./src/AxiWidgets/bin/Release/net10.0-windows/AxiWidgets.exe --gallery
 ```
 
-Close any existing instance first; a second process exits. There is no installer or autostart registration.
+Close an existing instance first; the manager allows only one instance. An installer and autostart option are not implemented yet.
 
-## Gallery and editing
+## Using widgets
 
-Left-click the AxiWidgets notification icon to open the gallery. Right-click opens the styled menu with Open widgets and Exit actions. Exit saves the layout and closes the entire application. The icon may be in the taskbar overflow area.
+- Left-click the tray icon to open the widget gallery. Right-click for the styled gallery/Exit menu.
+- Choose Clock, Calendar or Reminders. Each preview creates an independent widget.
+- Opening the gallery enables layout editing. Drag widgets to snap to display edges, centers and neighboring cards. Right-click a widget for its settings or removal.
+- Done closes the gallery, locks widget positions and saves the layout. The gallery is a fixed topmost tool window; outside clicks and Alt+F4 do not dismiss it. Exit in the tray menu closes the entire application.
+- Clocks offer date and seconds toggles and update at displayed time boundaries.
+- Calendar uses the local Windows calendar, a Monday-first grid, and updates at midnight and time/resume events.
+- Reminders work in normal mode. Tasks are shared across all Reminders instances. Enter adds a task, Escape cancels input, and clicking outside the input strip ends editing. New tasks appear first; completed tasks follow active tasks, with the most recently completed first. Text is limited to 200 characters.
+- Scroll Reminders with the wheel or by dragging the list. Relative mouse input keeps dragging at screen edges while the ordinary cursor remains visible. Elastic scrolling, inertia and row animations stop updating when idle.
 
-The gallery follows the reference's 1000 × 520 layout, dark translucent surface, 220-DIP sidebar, search, blue Clock selection, green add badges and Done button. Three categories are available: **Clock**, **Calendar**, and **Reminders**. Clock has Digital and With seconds variants. Calendar and Reminders use 364 × 384 DIP cards (364 × 384 physical pixels at 100% scale).
+Cards use a live HostBackdropBrush, native Gaussian blur, 55% `#1E1E22` tint, a shared 30-DIP rounded clip and a thin outline. No wallpaper image or screen capture supplies the background. The gallery has an opaque dark background and system-rounded corners. Calendar/Reminders are 364 x 384 DIP (physical pixels at 100% scaling); clocks are 300 x 160 DIP.
 
-- Opening the gallery enables editing. It is a fixed tool window above other windows and excluded from the taskbar/Alt+Tab.
-- It cannot be dragged or resized. Clicking outside, Escape and Alt+F4 do not dismiss it.
-- Click a preview to add an independent clock. Search filters the Clock category.
-- Drag desktop clocks to snap to edges, centers and neighboring gaps. Threshold/gap: 12 DIP; screen inset: 8 DIP; release radius: 18 DIP.
-- Right-click a desktop clock while editing for **Show seconds**, **Show date**, and **Remove clock**.
-- **Done** hides the gallery, releases mouse capture, removes guides, disables widget input and saves positions.
-- Every clock uses HostBackdropBrush with a native Gaussian blur and a fixed 25% `#1E1E22` tint. A shared 30-DIP Composition clip covers glass, text, and the fine 0.6-DIP outline; pixels outside the rounded card are transparent. The gallery has no appearance controls.
+## Local data and diagnostics
 
-Only the gallery is topmost. Desktop clocks remain below ordinary applications. The gallery is reusable, and its preview timer stops while hidden. Exiting the operating-system session or terminating the application still tears it down; Done does not exit the manager.
+The current development build writes `.local/` beside the executable: `layout.json`, `appearance.json`, shared `reminders.json` and `diagnostics.log`. Override with `--data=C:\path\to\folder`. These files, build outputs, SDK caches, dumps and local credentials are excluded from Git. A future installed build will need a per-user data location.
 
-Calendar follows the local Windows calendar with a Monday-first grid and updates at midnight and system time changes. Reminders share one local `reminders.json` across instances. In normal mode, use checkboxes, delete buttons and the scrollable list; click Add a reminder to open a temporary text editor. Enter adds a task, Escape cancels, and leaving the editor releases keyboard focus. Tasks are limited to 200 characters. Edit mode moves the entire card.
-
-## Data and diagnostics
-
-Settings and diagnostics are in `.local` beside the executable. Global appearance is in `appearance.json`; widget identities and positions stay in `layout.json`. Appearance is saved after a short idle delay and flushed by Done. Override with `--data=C:\path\to\writable-folder`. Writes use a temporary file followed by replacement; write errors are logged and notified.
-
-Native test run, after closing the normal app:
+After closing the normal app, run the isolated native smoke harness:
 
 ```powershell
-./.tools/dotnet/dotnet src/AxiWidgets/bin/Release/net10.0-windows/AxiWidgets.dll --smoke --data=.local/smoke
+$env:DOTNET_ROOT = Join-Path $PWD '.tools/dotnet'
+& "$env:DOTNET_ROOT/dotnet.exe" src/AxiWidgets/bin/Release/net10.0-windows/AxiWidgets.dll --smoke --data=.local/smoke
 ```
 
-The smoke harness verifies real HWND ownership/input transitions, persistence, editor tool/topmost styles, close suppression, search, preview actions and Done locking. It writes `gallery-layout.png` using the WPF renderer for layout inspection (the image excludes the live DWM background). It modifies only its selected data folder and exits. Each run adds test clocks.
+`./build.ps1 -Test` runs the dependency-free test executable; `dotnet test` is not the test command. Smoke exercises actual HWND/input lifecycle, gallery/tray actions, task editing and scrolling, persistence and full shutdown. It modifies only its selected data directory and exits. Its WPF layout PNGs exclude the desktop backdrop. `--live-probe` is an opt-in, finite diagnostic pixel comparison, not a rendering loop or a blur-strength measurement.
 
-The 25 pure unit tests are an executable harness, not `dotnet test`:
+See [architecture](docs/architecture.md) and [validation limits](docs/validation.md). Mixed-DPI hardware, Explorer recovery and Win+D/fullscreen behavior require explicit visual testing; API acceptance alone is not proof of live blur. Archived experiments and machine-specific measurements are not part of the source tree.
 
-```powershell
-./.tools/dotnet/dotnet run --project tests/AxiWidgets.Tests -c Release
-```
+## License
 
-`--poc=normal`, `--poc=noactivate` and `--poc=desktop` remain as host diagnostics; all use the native Composition card. Only desktop mode attaches the popup to the desktop owner. The gray SystemBackdrop variant is not selectable.
-
-## Architecture and limits
-
-- `AxiWidgets.Core`: independent geometry and boundary-based clock scheduling.
-- `DesktopHost`: desktop ownership, coordinates and window styles; the gallery's legacy backdrop.
-- `AxiWidgets.Native`: one native HWND per clock, shared compositor/graphics device, live backdrop and DirectWrite text. Text redraws only at the displayed time boundary or after a settings/DPI change.
-- `ClockWindow`: native card lifecycle, scheduling, drag and instance settings.
-- `GalleryWindow`: fixed editor and clock previews.
-- `Manager`: lifecycle, tray launcher, persistence and shell recovery.
-
-Desktop clocks are top-level WS_POPUP windows owned by the discovered desktop host, with bottom Z-order enforced. SetParent shell children were abandoned after invisible rendering was reproduced. Monitor IDs use display-device names, not stable hardware identities. Mixed-DPI hardware, Win+D/fullscreen and Explorer restart behavior still need the full validation matrix. Native Acrylic success on this machine is not a cross-version guarantee.
-
-[Architecture history](docs/architecture.md) · [Validation](docs/validation.md)
-
-Gallery design adapted from [VaticUI/DeskWidgets](https://github.com/VaticUI/DeskWidgets). The WPF implementation contains no Python runtime or reference bitmap assets. See [third-party notice](THIRD-PARTY-NOTICES.md). Source is MIT licensed.
+MIT; see [LICENSE](LICENSE). Gallery design is adapted from [VaticUI/DeskWidgets](https://github.com/VaticUI/DeskWidgets); its notice is retained in [THIRD-PARTY-NOTICES.md](THIRD-PARTY-NOTICES.md).

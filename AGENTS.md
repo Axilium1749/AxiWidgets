@@ -1,26 +1,21 @@
 # AxiWidgets development rules
 
-- C# / .NET 10 / WPF, x64 Windows. Only Digital Clock in this MVP.
-- Core contains pure geometry and scheduling; never reference WPF or Win32 there.
-- DesktopHost owns P/Invoke, shell discovery, native coordinates and DWM. Do not scatter native calls across new widget types.
-- All native window positions and snap inputs use physical screen pixels. Convert margins/gaps using the destination display scale. Persist monitor-relative DIP positions.
-- Never enable Always-on-top for desktop clocks, AllowsTransparency, WS_EX_LAYERED, wallpaper screenshots or continuous redraw/polling to hide a backdrop failure. The user explicitly requires the gallery editor to be topmost.
-- DWM success is not proof of visible blur. Preserve diagnostic modes and report real HRESULTs. Solid fallback must be described as solid.
-- Normal mode disables the clock HWND. Edit mode is explicit through the tray. On exit release capture and clear guides before disabling input.
-- No new widget processes; one manager and one HWND per clock. Schedule clock updates at displayed time boundaries.
-- Shell restart recovery must be event-driven with bounded retries. Keep the hidden broadcast listener independent of shell children.
-- Dispose timers, native resources, tray menus and system-event subscriptions.
-- Run `./build.ps1 -Test`. Tests are a dependency-free executable harness; `dotnet test` is not the test command.
-- Run native smoke with `--smoke --data=.local/smoke` when changing HWND lifecycle; close the normal app first. Smoke modifies only its specified data folder.
-- Do not claim manual Win+D, monitor hotplug, Explorer restart, GPU, Wallpaper Engine or long-idle validation without actually testing it.
+- Windows x64, C# / .NET 10 / WPF manager and C++/WinRT Composition DLL. Supported widgets: Clock, Calendar, Reminders. One manager process, one desktop HWND per widget; temporary native text-entry child controls are allowed for explicit input.
+- Core contains pure geometry, scheduling, calendar, storage and scroll physics; never reference WPF or Win32 there.
+- DesktopHost owns managed P/Invoke, shell discovery, native coordinates and DWM. Do not scatter native calls across widget types. Native rendering belongs in AxiWidgets.Native.
+- Native positions and snap inputs are physical screen pixels. Scale margins/gaps for the destination display. Persist monitor-relative DIP positions.
+- Desktop widgets use desktop-owned top-level WS_POPUP, not SetParent shell children. Keep HWND_BOTTOM enforcement and verify actual rendering. Only the gallery is topmost.
+- Preserve HostBackdropBrush live composition, shared rounded clipping and the existing tint. Do not replace the backdrop with wallpaper screenshots, static images, WPF AllowsTransparency, layered widget HWNDs, or continuous redraw/polling to conceal a backdrop failure. Do not revive the gray SystemBackdrop selector or HRGN/Accent corner experiments.
+- The gallery is opaque WPF with DWM rounding. Do not add a second outer WPF contour. Left tray click opens the gallery; right click opens its styled context menu. Done dismisses the gallery and locks positions; Exit shuts down the application.
+- Normal mode disables Clock/Calendar HWND input. Reminders remain interactive for tasks and list scrolling, without enabling whole-widget movement. Text entry activates only after a click. On exit from edit/drag, release capture and clear guides; unregister relative mouse input on release/loss/shutdown.
+- Clock updates follow displayed time boundaries. Calendar updates at midnight/system events. Reminders redraw on state/input changes; composition animations and virtualization maintenance run only during movement, not continuously while idle.
+- DWM/compositor API acceptance is not visual proof of blur. Preserve diagnostics and real HRESULTs; describe solid rendering as solid. Diagnostic captures must be finite, explicitly authorized and confined to widget areas; never use them as a rendering source.
+- Shell recovery must be event-driven with bounded retries. Keep the hidden broadcast listener independent of shell-owned widgets.
+- Dispose timers, native resources, menus, tray icon and system-event subscriptions.
+- Before building a fresh checkout, run ./scripts/Bootstrap.ps1. Versions/checksums are pinned in scripts/toolchain.lock.json. Keep downloaded SDKs, binaries and caches in ignored .tools; no developer-specific absolute paths.
+- Run ./build.ps1 -Test. Tests are a dependency-free executable harness; dotnet test is not the test command.
+- When changing HWND lifecycle, close the normal app and run --smoke --data=.local/smoke. Smoke may modify only its chosen data folder.
+- Do not claim Win+D, hotplug, Explorer restart, GPU, Wallpaper Engine or long-idle validation without actually testing it.
+- Keep user settings, tasks, credentials, logs, dumps, old experiments and machine-specific screenshots/results out of tracked source. Archive useful local work under ignored .local/archive before cleanup.
 - No GitHub remote, push, global SDK installation, shell termination or persistent system settings without user authorization.
-- WFO0003 alone is suppressed: WinForms supplies NotifyIcon, but WPF owns startup and declares PerMonitorV2 in the manifest.
-Current host uses desktop-owned top-level WS_POPUP, not SetParent children. Keep HWND_BOTTOM enforcement and verify real visual rendering; previous child HWND smoke did not establish visibility.
-
-DWM alone owns desktop clock contours. The gallery also uses DWM rounding: custom HRGN with AccentPolicy produced opaque corner artifacts and has been removed. Do not layer another outer rounded WPF border. Blur and background transparency are global in appearance.json; do not reintroduce per-clock overrides. Native composition is experimental; resetting it must clear extended glass and restore opaque rendering.
-
-
-Only native AccentPolicy Acrylic is supported. Do not restore the gray SystemBackdrop selector. Tray clicks open the fixed gallery; Done alone dismisses it and locks clocks. Respect application shutdown and stop preview timers while hidden.
-
-
-
+- WFO0003 alone is suppressed: WinForms provides NotifyIcon/native input, while WPF owns startup and declares PerMonitorV2 in the manifest.
