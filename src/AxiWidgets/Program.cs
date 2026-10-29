@@ -29,19 +29,9 @@ internal static class TrayArtwork
 {
     internal static Drawing.Icon Create()
     {
-        using var bitmap=new Drawing.Bitmap(32,32);
-        using(var g=Drawing.Graphics.FromImage(bitmap)) {
-            g.SmoothingMode=Drawing.Drawing2D.SmoothingMode.AntiAlias;
-            using var face=new Drawing.SolidBrush(Drawing.Color.FromArgb(19,93,195));
-            using var rim=new Drawing.Pen(Drawing.Color.FromArgb(215,232,255),1.4f);
-            using var hand=new Drawing.Pen(Drawing.Color.White,2.5f) {StartCap=Drawing.Drawing2D.LineCap.Round,EndCap=Drawing.Drawing2D.LineCap.Round};
-            g.FillEllipse(face,2,2,28,28); g.DrawEllipse(rim,2.7f,2.7f,26.6f,26.6f);
-            g.DrawLine(hand,16,16,16,8); g.DrawLine(hand,16,16,21,19);
-            g.FillEllipse(Drawing.Brushes.White,14.3f,14.3f,3.4f,3.4f);
-        }
-        nint handle=bitmap.GetHicon();
-        try {using var temporary=Drawing.Icon.FromHandle(handle);return (Drawing.Icon)temporary.Clone();}
-        finally {Native.DestroyIcon(handle);}
+        using var stream=Application.GetResourceStream(new Uri("/AxiWidgets;component/Assets/AxiWidgets.ico",UriKind.Relative))!.Stream;
+        using var icon=new Drawing.Icon(stream,Forms.SystemInformation.SmallIconSize);
+        return (Drawing.Icon)icon.Clone();
     }
 }
 internal static class Program
