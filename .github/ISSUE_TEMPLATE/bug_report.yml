@@ -1,0 +1,29 @@
+name: Bug report
+description: Report a reproducible problem with AxiWidgets
+body:
+  - type: input
+    id: version
+    attributes:
+      label: AxiWidgets version
+      placeholder: 0.1.0
+    validations:
+      required: true
+  - type: input
+    id: windows
+    attributes:
+      label: Windows version and build
+      description: Include display scaling/refresh rate or wallpaper software if relevant.
+    validations:
+      required: true
+  - type: textarea
+    id: reproduce
+    attributes:
+      label: Steps to reproduce
+      description: What did you do, what happened, and what did you expect?
+    validations:
+      required: true
+  - type: textarea
+    id: diagnostics
+    attributes:
+      label: Optional diagnostics
+      description: Share only relevant log excerpts or screenshots. Remove personal task text, paths and other private information first.

@@ -1,17 +1,33 @@
+<p align="center"><img src="src/AxiWidgets/Assets/AxiWidgets.png" width="112" alt="AxiWidgets logo"></p>
+
 # AxiWidgets
+
+[![Windows build](https://github.com/Axilium1749/AxiWidgets/actions/workflows/build.yml/badge.svg)](https://github.com/Axilium1749/AxiWidgets/actions/workflows/build.yml)
+[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
+
+**[Download for Windows](https://github.com/Axilium1749/AxiWidgets/releases/latest)** · [Report a bug](https://github.com/Axilium1749/AxiWidgets/issues/new/choose) · [Contributing](CONTRIBUTING.md)
 
 Native glass widgets for the Windows desktop: Clock, Calendar and Reminders.
 A C# / .NET 10 / WPF manager hosts C++/WinRT Windows Composition cards in one process.
 
+## Install
+
+Download `AxiWidgets-Setup-0.1.0-x64.exe` from [Releases](https://github.com/Axilium1749/AxiWidgets/releases/latest) and run it. The installer includes .NET, installs for the current user without elevation, and offers optional autostart. Use the tray icon to open the gallery or exit. The installer is currently unsigned.
+
 ## Requirements
 
-- Windows 11 x64. Live backdrop composition uses Windows 11 APIs; behavior on other Windows builds and wallpaper renderers needs testing.
+- Windows 11 22H2 or later, x64 (build 22621+). Live backdrop composition uses Windows 11 APIs; behavior on other Windows builds and wallpaper renderers needs testing.
 - 64-bit Windows PowerShell 5.1 or PowerShell 7 for building.
 - Internet access for the first toolchain download, and approximately 4 GB of free disk space.
 
 ## Build from a clean clone
 
-Run from the repository root:
+Clone the repository and run from its root:
+
+```powershell
+git clone https://github.com/Axilium1749/AxiWidgets.git
+cd AxiWidgets
+```
 
 ```powershell
 ./scripts/Bootstrap.ps1

@@ -18,3 +18,5 @@ Before a public binary release, manually verify:
 Historical per-machine CPU/GPU samples and experimental host screenshots are archived locally and are not current performance claims. No full hardware/long-idle validation is implied by a successful build or smoke run.
 
 Installer automation has verified a separate test AppId: self-contained launch without a configured .NET installation, optional Run entry and shortcuts, update while the app is running, graceful shutdown, and uninstall preserving data while removing its Run entry and shortcuts. Smoke checks autostart enable/disable in an isolated registry key and non-destructive legacy data migration. A real Windows sign-out/sign-in was not performed.
+
+The project owner confirmed that the 0.1.0 installer works on their Windows installation before the first public release. This is user-reported installation validation, not a claim that every hardware/desktop scenario above has been checked.
