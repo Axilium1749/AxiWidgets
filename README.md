@@ -28,7 +28,7 @@ Close any existing instance first; a second process exits. There is no installer
 
 Click the AxiWidgets notification icon (left or right button) to open the gallery. The icon may be in the taskbar overflow area. The old tray context menu is gone.
 
-The gallery follows the reference's 1000 × 520 layout, dark translucent surface, 220-DIP sidebar, search, blue Clock selection, green add badges and Done button. Only digital clocks are available: **Digital** and **With seconds**. Both are the same widget type with different initial settings.
+The gallery follows the reference's 1000 × 520 layout, dark translucent surface, 220-DIP sidebar, search, blue Clock selection, green add badges and Done button. Three categories are available: **Clock**, **Calendar**, and **Reminders**. Clock has Digital and With seconds variants. Calendar and Reminders use 364 × 384 DIP cards (364 × 384 physical pixels at 100% scale).
 
 - Opening the gallery enables editing. It is a fixed tool window above other windows and excluded from the taskbar/Alt+Tab.
 - It cannot be dragged or resized. Clicking outside, Escape and Alt+F4 do not dismiss it.
@@ -39,6 +39,8 @@ The gallery follows the reference's 1000 × 520 layout, dark translucent surface
 - Every clock uses HostBackdropBrush with a native Gaussian blur and a fixed 25% `#1E1E22` tint. A shared 30-DIP Composition clip covers glass, text, and the fine 0.6-DIP outline; pixels outside the rounded card are transparent. The gallery has no appearance controls.
 
 Only the gallery is topmost. Desktop clocks remain below ordinary applications. The gallery is reusable, and its preview timer stops while hidden. Exiting the operating-system session or terminating the application still tears it down; Done does not exit the manager.
+
+Calendar follows the local Windows calendar with a Monday-first grid and updates at midnight and system time changes. Reminders share one local `reminders.json` across instances. In normal mode, use checkboxes, delete buttons and the scrollable list; click Add a reminder to open a temporary text editor. Enter adds a task, Escape cancels, and leaving the editor releases keyboard focus. Tasks are limited to 200 characters. Edit mode moves the entire card.
 
 ## Data and diagnostics
 
@@ -52,7 +54,7 @@ Native test run, after closing the normal app:
 
 The smoke harness verifies real HWND ownership/input transitions, persistence, editor tool/topmost styles, close suppression, search, preview actions and Done locking. It writes `gallery-layout.png` using the WPF renderer for layout inspection (the image excludes the live DWM background). It modifies only its selected data folder and exits. Each run adds test clocks.
 
-The 21 pure unit tests are an executable harness, not `dotnet test`:
+The 25 pure unit tests are an executable harness, not `dotnet test`:
 
 ```powershell
 ./.tools/dotnet/dotnet run --project tests/AxiWidgets.Tests -c Release
@@ -74,6 +76,3 @@ Desktop clocks are top-level WS_POPUP windows owned by the discovered desktop ho
 [Architecture history](docs/architecture.md) · [Validation](docs/validation.md)
 
 Gallery design adapted from [VaticUI/DeskWidgets](https://github.com/VaticUI/DeskWidgets). The WPF implementation contains no Python runtime or reference bitmap assets. See [third-party notice](THIRD-PARTY-NOTICES.md). Source is MIT licensed.
-
-
-

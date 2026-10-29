@@ -15,6 +15,7 @@ internal partial class GalleryWindow : Window
     private readonly Manager manager;
     private readonly DispatcherTimer timer=new();
     private bool allowClose;
+    private string category="Clock";
     internal nint Handle { get; private set; }
     internal bool PreviewTimerRunning => timer.IsEnabled;
     internal GalleryWindow(Manager manager)
@@ -65,15 +66,34 @@ internal partial class GalleryWindow : Window
     }
     private void SearchChanged(object sender,TextChangedEventArgs e)
     {
-        if(Previews==null) return;
+        if(Previews==null||SpecialPreviews==null)return;
         string query=Search.Text.Trim();
-        bool found=query.Length==0||"clock digital time seconds часы время".Contains(query,StringComparison.CurrentCultureIgnoreCase);
+        bool Match(string text)=>query.Length==0||text.Contains(query,StringComparison.CurrentCultureIgnoreCase);
+        bool clock=Match("clock digital time seconds часы время"),calendar=Match("calendar date календарь дата"),reminders=Match("reminders todo tasks напоминания задачи");
         SearchPlaceholder.Visibility=query.Length==0?Visibility.Visible:Visibility.Collapsed;
-        ClockCategory.Visibility=Previews.Visibility=found?Visibility.Visible:Visibility.Collapsed;
-        EmptySearch.Visibility=found?Visibility.Collapsed:Visibility.Visible;
+        ClockCategory.Visibility=clock?Visibility.Visible:Visibility.Collapsed;
+        CalendarCategory.Visibility=calendar?Visibility.Visible:Visibility.Collapsed;
+        RemindersCategory.Visibility=reminders?Visibility.Visible:Visibility.Collapsed;
+        Previews.Visibility=clock&&(category=="Clock"||query.Length>0)?Visibility.Visible:Visibility.Collapsed;
+        CalendarPreviewButton.Visibility=calendar&&(category=="Calendar"||query.Length>0)?Visibility.Visible:Visibility.Collapsed;
+        RemindersPreviewButton.Visibility=reminders&&(category=="Reminders"||query.Length>0)?Visibility.Visible:Visibility.Collapsed;
+        SpecialPreviews.Visibility=CalendarPreviewButton.Visibility==Visibility.Visible||RemindersPreviewButton.Visibility==Visibility.Visible?Visibility.Visible:Visibility.Collapsed;
+        EmptySearch.Visibility=clock||calendar||reminders?Visibility.Collapsed:Visibility.Visible;
         RefreshPreview();
     }
-    private void SelectClock(object sender,RoutedEventArgs e) { Search.Clear(); }
+    private void SelectCategory(string value){
+        category=value;Search.Clear();CategoryHeading.Text=value;
+        CategoryDescription.Text=value=="Clock"?"The time here, simply digital. Add a clock with or without seconds.":value=="Calendar"?"Your month at a glance. Updated automatically every day.":"Your local to-do list. Shared across all Reminders widgets.";
+        ClockCategory.Background=category=="Clock"?new SolidColorBrush(Color.FromRgb(10,100,214)):Brushes.Transparent;
+        CalendarCategory.Background=category=="Calendar"?new SolidColorBrush(Color.FromRgb(10,100,214)):Brushes.Transparent;
+        RemindersCategory.Background=category=="Reminders"?new SolidColorBrush(Color.FromRgb(10,100,214)):Brushes.Transparent;
+        SearchChanged(Search,null!);
+    }
+    private void SelectClock(object sender,RoutedEventArgs e)=>SelectCategory("Clock");
+    private void SelectCalendar(object sender,RoutedEventArgs e)=>SelectCategory("Calendar");
+    private void SelectReminders(object sender,RoutedEventArgs e)=>SelectCategory("Reminders");
+    private void AddCalendar(object sender,RoutedEventArgs e){manager.AddFromGallery(false,"Calendar");AddedStatus.Text="Calendar added to your desktop";}
+    private void AddReminders(object sender,RoutedEventArgs e){manager.AddFromGallery(false,"Reminders");AddedStatus.Text="Reminders added to your desktop";}
     private void AddDigital(object sender,RoutedEventArgs e) { manager.AddFromGallery(false); AddedStatus.Text="Digital Clock added to your desktop"; }
     private void AddSeconds(object sender,RoutedEventArgs e) { manager.AddFromGallery(true); AddedStatus.Text="Clock with seconds added to your desktop"; }
     private void DoneClicked(object sender,RoutedEventArgs e) { manager.FinishEditing(); }

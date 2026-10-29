@@ -54,6 +54,7 @@ public sealed class SnapEngine
 
 public sealed class ClockState
 {
+    public string Kind {get;set;}="Clock";
     public Guid Id { get; set; } = Guid.NewGuid();
     public string Monitor { get; set; } = "";
     public double X { get; set; } = 48;

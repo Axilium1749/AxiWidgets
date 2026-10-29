@@ -12,7 +12,7 @@ using Rect=AxiWidgets.Core.Rect;
 
 namespace AxiWidgets;
 
-internal sealed class ClockWindow
+internal sealed partial class ClockWindow
 {
     internal readonly ClockState State;
     internal readonly nint Handle;
@@ -33,7 +33,8 @@ internal sealed class ClockWindow
     internal ClockWindow(Manager manager,ClockState state,string mode)
     {
         this.manager=manager;State=state;this.mode=mode;
-        NativeCard.Check(NativeCard.Create(out Handle));
+        NativeCard.Check(NativeCard.CreateWidget(out Handle,WidgetWidth,WidgetHeight));
+        if(State.Kind=="Reminders")manager.Reminders.Changed+=RefreshClock;
         AcrylicAccepted=true;
         messages=new Messages(this);messages.AssignHandle(Handle);
         var resources=new ResourceDictionary {Source=new Uri("/AxiWidgets;component/WidgetMenu.xaml",UriKind.Relative)};
@@ -48,7 +49,7 @@ internal sealed class ClockWindow
     internal void Close()
     {
         if(closed)return;
-        EndDrag();closed=true;timer.Stop();ContextMenu.IsOpen=false;
+        EndInput();manager.Reminders.Changed-=RefreshClock;EndDrag();closed=true;timer.Stop();ContextMenu.IsOpen=false;
         messages.ReleaseHandle();NativeCard.Check(NativeCard.Destroy(Handle));Closed?.Invoke(this,EventArgs.Empty);
     }
     internal void ApplyTheme()
@@ -60,7 +61,7 @@ internal sealed class ClockWindow
     {
         if(closed)return;
         if(!enabled)ContextMenu.IsOpen=false;
-        EndDrag();Editing=enabled;DesktopHost.Input(Handle,enabled);ApplyTheme();
+        EndInput();EndDrag();Editing=enabled;DesktopHost.Input(Handle,enabled||State.Kind=="Reminders");ApplyTheme();
     }
     internal void UpdateContextMenu()
     {
@@ -69,10 +70,12 @@ internal sealed class ClockWindow
             var item=new MenuItem {Header=label,IsCheckable=true,IsChecked=value};
             item.Click+=(_,_)=>{change();RefreshClock();manager.Save();};ContextMenu.Items.Add(item);
         }
+        if(State.Kind=="Clock") {
         Toggle("Show seconds",State.Seconds,()=>State.Seconds=!State.Seconds);
         Toggle("Show date",State.Date,()=>State.Date=!State.Date);
+        }
         ContextMenu.Items.Add(new Separator {Style=(Style)ContextMenu.FindResource("WidgetMenuSeparator")});
-        var remove=new MenuItem {Header="Remove clock",Tag="Remove"};remove.Click+=(_,_)=>manager.RemoveClock(this);ContextMenu.Items.Add(remove);
+        var remove=new MenuItem {Header="Remove "+State.Kind.ToLowerInvariant(),Tag="Remove"};remove.Click+=(_,_)=>manager.RemoveClock(this);ContextMenu.Items.Add(remove);
     }
     internal void OpenMenu()
     {
@@ -93,6 +96,12 @@ internal sealed class ClockWindow
     {
         if(closed)return;
         timer.Stop();var now=DateTime.Now;
+        if(State.Kind!="Clock") {
+            scroll=Math.Clamp(scroll,0,Math.Max(0,manager.Reminders.Items.Count-4));
+            var drawing=State.Kind=="Calendar"?WidgetDrawing.Calendar(now):WidgetDrawing.Reminders(manager.Reminders.Items,scroll);
+            NativeCard.Check(NativeCard.SetContent(Handle,drawing.Commands.ToArray(),drawing.Commands.Count));
+            if(State.Kind=="Calendar"){timer.Interval=new DateTimeOffset(now.Date.AddDays(1))-new DateTimeOffset(now);timer.Start();}return;
+        }
         NativeCard.Check(NativeCard.SetText(Handle,now.ToString(State.Seconds?"HH:mm:ss":"HH:mm",CultureInfo.CurrentCulture),
             State.Date?now.ToString("dddd, d MMMM",CultureInfo.CurrentCulture):""));
         timer.Interval=ClockSchedule.Next(now,State.Seconds);timer.Start();
@@ -101,7 +110,7 @@ internal sealed class ClockWindow
     {
         var displays=Display.All();
         var m=displays.Find(x=>x.Id==State.Monitor)??displays.Find(x=>x.Primary)??displays[0];
-        var r=SnapEngine.Clamp(new(m.Work.X+State.X*m.Scale,m.Work.Y+State.Y*m.Scale,300*m.Scale,160*m.Scale),m.Work,8*m.Scale);
+        var r=SnapEngine.Clamp(new(m.Work.X+State.X*m.Scale,m.Work.Y+State.Y*m.Scale,WidgetWidth*m.Scale,WidgetHeight*m.Scale),m.Work,8*m.Scale);
         NativeCard.Check(NativeCard.SetDpi(Handle,(float)m.Scale));DesktopHost.Move(Handle,r);Remember();
     }
     internal void Remember()
@@ -117,10 +126,10 @@ internal sealed class ClockWindow
     {
         if(!dragging)return;
         Native.GetCursorPos(out var p);var r=start with {X=start.X+p.X-pointer.X,Y=start.Y+p.Y-pointer.Y};var m=Display.For(r);
-        r=r with {Width=300*m.Scale,Height=160*m.Scale};var result=snap.Snap(r,manager.Neighbors(this),m.Work,m.Scale);
+        r=r with {Width=WidgetWidth*m.Scale,Height=WidgetHeight*m.Scale};var result=snap.Snap(r,manager.Neighbors(this),m.Work,m.Scale);
         NativeCard.Check(NativeCard.SetDpi(Handle,(float)m.Scale));DesktopHost.Move(Handle,result.Bounds);
-        float x=result.GuideX is double gx?(float)Math.Clamp((gx-result.Bounds.X)/m.Scale,2,298):-1;
-        float y=result.GuideY is double gy?(float)Math.Clamp((gy-result.Bounds.Y)/m.Scale,2,158):-1;
+        float x=result.GuideX is double gx?(float)Math.Clamp((gx-result.Bounds.X)/m.Scale,2,WidgetWidth-2):-1;
+        float y=result.GuideY is double gy?(float)Math.Clamp((gy-result.Bounds.Y)/m.Scale,2,WidgetHeight-2):-1;
         NativeCard.Check(NativeCard.SetGuides(Handle,x,y));
     }
     private void EndDrag()
@@ -141,14 +150,16 @@ internal sealed class ClockWindow
                     if((flags&4)==0)Marshal.WriteIntPtr(message.LParam,IntPtr.Size,1);
                 }
                 switch(message.Msg){
-                case 0x201:owner.BeginDrag();break;
+                case 0x201:if(owner.Editing)owner.BeginDrag();else owner.ReminderClick();break;
+                case 0x20A:owner.Scroll(unchecked((short)((long)message.WParam>>16)));message.Result=0;return;
+                case 0x84:if(!owner.Editing&&owner.State.Kind=="Reminders"&&!owner.InteractivePoint()){message.Result=-1;return;}break;
                 case 0x200:owner.MoveDrag();break;
                 case 0x202:case 0x215:owner.EndDrag();break;
                 case 0x7B:owner.OpenMenu();message.Result=0;return;
                 case 0x20:Native.SetCursor(Native.LoadCursor(0,owner.Editing?32646:32512));message.Result=1;return;
                 case 0x21:message.Result=3;return;
                 case 0x7E:case 0x2E0:Application.Current.Dispatcher.BeginInvoke(()=>{if(!owner.closed&&!owner.dragging)owner.Restore();});break;
-                case 0x1A:case 0x320:Application.Current.Dispatcher.BeginInvoke(()=>owner.ApplyTheme());break;
+                case 0x1A:case 0x320:Application.Current.Dispatcher.BeginInvoke(()=>{owner.ApplyTheme();owner.RefreshClock();});break;
                 case 0x1E:owner.RefreshClock();break;
                 case 0x82:Application.Current.Dispatcher.BeginInvoke(()=>owner.Close());break;
                 }

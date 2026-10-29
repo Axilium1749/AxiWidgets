@@ -20,6 +20,8 @@ internal static class Native
     [StructLayout(LayoutKind.Sequential)] internal struct CompositionData { public int Attribute; public nint Data; public nuint Size; }
     [DllImport("user32.dll",SetLastError=true)] [return: MarshalAs(UnmanagedType.Bool)]
     internal static extern bool SetWindowCompositionAttribute(nint hwnd,ref CompositionData data);
+    [DllImport("user32.dll")] internal static extern nint GetForegroundWindow();
+    [DllImport("user32.dll")] internal static extern bool SetForegroundWindow(nint hwnd);
     [DllImport("user32.dll",CharSet=CharSet.Unicode)] internal static extern nint FindWindow(string cls,string? title);
     [DllImport("user32.dll",CharSet=CharSet.Unicode)] internal static extern nint FindWindowEx(nint parent,nint after,string? cls,string? title);
     [DllImport("user32.dll")] internal static extern bool EnumWindows(EnumProc callback,nint data);
@@ -33,6 +35,7 @@ internal static class Native
     [DllImport("user32.dll")] internal static extern bool GetWindowRect(nint hwnd,out Rectangle rect);
     [DllImport("user32.dll")] internal static extern bool ScreenToClient(nint hwnd,ref Point point);
     [DllImport("user32.dll")] internal static extern bool GetCursorPos(out Point point);
+    [DllImport("user32.dll")] internal static extern bool SetCursorPos(int x,int y);
     [DllImport("user32.dll")] internal static extern bool IsWindow(nint hwnd);
     [DllImport("user32.dll")] internal static extern bool IsWindowVisible(nint hwnd);
     [DllImport("user32.dll")] internal static extern bool ShowWindow(nint hwnd,int command);

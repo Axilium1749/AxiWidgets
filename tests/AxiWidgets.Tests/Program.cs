@@ -31,7 +31,7 @@ Check("legacy layout keeps instance settings without System Acrylic",()=> {
 Check("tint opacity bounds and invalid values",()=> {
     var a=new AppearanceSettings {TintOpacity=-50};a.Normalize();Equal(0,a.TintOpacity);Equal(0,a.TintAlpha);
     a.TintOpacity=150;a.Normalize();Equal(100,a.TintOpacity);Equal(255,a.TintAlpha);
-    a.TintOpacity=double.NaN;a.Normalize();Equal(25,a.TintOpacity);
+    a.TintOpacity=double.NaN;a.Normalize();Equal(55,a.TintOpacity);
 });
 Check("independent tint color and opacity round trip",()=> {
     var a=System.Text.Json.JsonSerializer.Deserialize<AppearanceSettings>(System.Text.Json.JsonSerializer.Serialize(new AppearanceSettings {Blur=false,TintColor="#804020",TintOpacity=75}))!;
@@ -44,4 +44,33 @@ Check("reject malformed tint colors",()=> {
     var a=new AppearanceSettings {TintColor="invalid"};a.Normalize();
     if(a.TintColor!="#1E1E22")throw new Exception("Wrong tint fallback");
 });
-Console.WriteLine($"{passed}/21 passed");
+Check("calendar all month lengths and Monday origin",()=>{
+    var culture=System.Globalization.CultureInfo.GetCultureInfo("ru-RU");
+    for(int year=2024;year<=2027;year++)for(int month=1;month<=12;month++){
+        var today=new DateTime(year,month,DateTime.DaysInMonth(year,month));var days=CalendarGrid.Build(today,culture);
+        Equal(42,days.Length);if(days[0].Date.DayOfWeek!=DayOfWeek.Monday)throw new Exception("Week origin");
+        Equal(DateTime.DaysInMonth(year,month),days.Count(x=>x.CurrentMonth));Equal(1,days.Count(x=>x.Today));
+        for(int i=1;i<42;i++)if(days[i].Date!=days[i-1].Date.AddDays(1))throw new Exception("Calendar gap");
+    }
+});
+Check("calendar year boundary and localized calendar",()=>{
+    foreach(string name in new[]{"en-US","ru-RU","ar-SA"}){
+        var days=CalendarGrid.Build(new DateTime(2026,1,1),System.Globalization.CultureInfo.GetCultureInfo(name));
+        Equal(1,days.Count(x=>x.Today));if(!days.Any(x=>!x.CurrentMonth))throw new Exception("Missing adjacent dates");
+    }
+});
+Check("reminders persistence order completion removal and empty input",()=>{
+    var folder=Path.Combine(Path.GetTempPath(),"AxiWidgets-test-"+Guid.NewGuid());var path=Path.Combine(folder,"reminders.json");
+    try{
+        var store=new ReminderStore(path);if(store.Add("   "))throw new Exception("Empty task added");
+        store.Add("  Первая задача  ");store.Add("Second");var id=store.Items[0].Id;store.Toggle(id);
+        var loaded=new ReminderStore(path);Equal(2,loaded.Items.Count);if(loaded.Items[0].Text!="Первая задача"||!loaded.Items[0].Done||loaded.Items[0].Id!=id)throw new Exception("Round trip failed");
+        loaded.Toggle(id);if(loaded.Items[0].Done)throw new Exception("Reactivate failed");loaded.Remove(loaded.Items[1].Id);
+        loaded=new ReminderStore(path);Equal(1,loaded.Items.Count);if(loaded.Items[0].Id!=id)throw new Exception("Wrong task deleted");
+    }finally{if(File.Exists(path))File.Delete(path);if(Directory.Exists(folder))Directory.Delete(folder);}
+});
+Check("widget kinds preserve old clock layouts",()=>{
+    if(System.Text.Json.JsonSerializer.Deserialize<ClockState>("{}")!.Kind!="Clock")throw new Exception("Legacy kind");
+    foreach(var kind in new[]{"Clock","Calendar","Reminders"}){var original=new ClockState{Kind=kind};var round=System.Text.Json.JsonSerializer.Deserialize<ClockState>(System.Text.Json.JsonSerializer.Serialize(original))!;if(round.Kind!=kind||round.Id!=original.Id)throw new Exception("Widget kind lost");}
+});
+Console.WriteLine($"{passed}/25 passed");

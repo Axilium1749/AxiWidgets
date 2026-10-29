@@ -75,12 +75,14 @@ internal sealed class Manager : IDisposable
     internal AppearanceSettings Appearance { get; private set; }=new();
     private readonly DispatcherTimer appearanceSave=new() { Interval=TimeSpan.FromMilliseconds(350) };
     private string AppearancePath=>Path.Combine(Log.Folder,"appearance.json");
+    internal ReminderStore Reminders {get;private set;}=null!;
     private string Settings=>Path.Combine(Log.Folder,"layout.json");
     internal Manager(string mode) { this.mode=mode; retry.Tick+=(_,_)=>Recover(); appearanceSave.Tick+=(_,_)=>SaveAppearance(); }
     internal void Start()
     {
         var watch=Stopwatch.StartNew();
         Appearance=new AppearanceSettings();
+        Reminders=new ReminderStore(Path.Combine(Log.Folder,"reminders.json"));
         listener=new HwndSource(new HwndSourceParameters("AxiWidgets Shell Listener") { Width=0,Height=0,WindowStyle=unchecked((int)0x80000000),ExtendedWindowStyle=0x80 });
         listener.AddHook(Messages);
         List<ClockState>? states=null;
@@ -167,7 +169,7 @@ internal sealed class Manager : IDisposable
             editing=false;Save();
             var saved=JsonSerializer.Deserialize<List<ClockState>>(File.ReadAllText(Settings))!;
             if(saved.Count!=windows.Count || saved.Select(s=>s.Id).Distinct().Count()!=saved.Count) throw new Exception("Persistence failed");
-            if(windows.Any(w=>Native.IsWindowEnabled(w.Handle))) throw new Exception("Input remains enabled");
+            if(windows.Any(w=>w.State.Kind!="Reminders"&&Native.IsWindowEnabled(w.Handle))) throw new Exception("Input remains enabled");
             OpenGallery();
             var editor=gallery!;
             long ex=(long)Native.GetLong(editor.Handle,-20);
@@ -195,10 +197,30 @@ internal sealed class Manager : IDisposable
             encoder.Frames.Add(System.Windows.Media.Imaging.BitmapFrame.Create(bitmap));
             using(var output=File.Create(Path.Combine(Log.Folder,"gallery-layout.png"))) encoder.Save(output);
             editor.DoneButton.RaiseEvent(new RoutedEventArgs(System.Windows.Controls.Button.ClickEvent));
-            if(editor.IsVisible||editor.PreviewTimerRunning||editing||windows.Any(w=>Native.IsWindowEnabled(w.Handle))) throw new Exception("Done failed to lock widgets or stop preview timer");
+            if(editor.IsVisible||editor.PreviewTimerRunning||editing||windows.Any(w=>w.State.Kind!="Reminders"&&Native.IsWindowEnabled(w.Handle))) throw new Exception("Done failed to lock widgets or stop preview timer");
             OpenGallery();
             if(gallery!=editor) throw new Exception("Gallery duplicated on reopen");
             FinishEditing();
+            OpenGallery();
+            int widgetStart=windows.Count;
+            editor.CalendarPreviewButton.RaiseEvent(new RoutedEventArgs(System.Windows.Controls.Button.ClickEvent));
+            if(windows.Count!=widgetStart+1||windows[^1].State.Kind!="Calendar")throw new Exception("Calendar creation failed");
+            editor.RemindersPreviewButton.RaiseEvent(new RoutedEventArgs(System.Windows.Controls.Button.ClickEvent));
+            editor.RemindersPreviewButton.RaiseEvent(new RoutedEventArgs(System.Windows.Controls.Button.ClickEvent));
+            if(windows.Count!=widgetStart+3||windows[^1].State.Kind!="Reminders")throw new Exception("Reminders creation failed");
+            FinishEditing();
+            if(Native.IsWindowEnabled(windows[widgetStart].Handle)||!Native.IsWindowEnabled(windows[^1].Handle))throw new Exception("Widget normal input policy failed");
+            windows[^1].SmokeReminderInput();
+            var created=Reminders.Items[^1].Id;
+            Reminders.Toggle(created);if(!new ReminderStore(Path.Combine(Log.Folder,"reminders.json")).Items.Single(x=>x.Id==created).Done)throw new Exception("Task state not saved");
+            Reminders.Toggle(created);Reminders.Remove(created);
+            windows[^1].SmokeReminderActions();
+            foreach(var widget in windows.Skip(widgetStart)){
+                widget.SmokeDrag();
+                var bounds=Native.Bounds(widget.Handle);double scale=Display.For(bounds).Scale;
+                if(Math.Abs(bounds.Width-364*scale)>1||Math.Abs(bounds.Height-384*scale)>1)throw new Exception("Widget DPI size failed");
+            }
+            Log.Write("WIDGET SMOKE PASS: independent gallery creation; calendar disabled/reminders enabled in normal mode; temporary text editor Enter/Escape; shared task refresh, toggle and persistence; native DPI dimensions; drag/capture/snap path.");
             Log.Write("GALLERY SMOKE PASS: tool/topmost styles, close/move/resize/minimize/maximize suppression, search and timer stop, two preview actions, Done locks input and stops timer, reusable window.");
             Log.Write("SMOKE PASS: native desktop parent, normal/edit input, independent instances, JSON save/read, input disabled on exit edit.");
         } catch(Exception e) {Log.Write("SMOKE FAIL: "+e);Environment.ExitCode=1;}
@@ -250,21 +272,21 @@ internal sealed class Manager : IDisposable
         foreach(var w in windows) {w.SetEdit(false);w.Remember();}
         Save(); gallery?.Dismiss();
     }
-    internal void AddFromGallery(bool seconds)
+    internal void AddFromGallery(bool seconds,string kind="Clock")
     {
         if(!editing) return;
         Native.GetCursorPos(out var cursor);
         var display=Display.For(new(cursor.X,cursor.Y,1,1));
         // Prefer a vacant slot above the gallery, then scan the work area.
-        double x=24,y=24;
+        double x=24,y=24;double width=kind=="Clock"?300:364,height=kind=="Clock"?160:384;
         var occupied=windows.Select(w=>Native.Bounds(w.Handle)).ToArray();
         bool found=false;
-        for(double row=24;row+160<=display.Work.Height/display.Scale-8&&!found;row+=172)
-            for(double col=display.Work.Width/display.Scale-324;col>=8;col-=312) {
-                var r=new Rect(display.Work.X+col*display.Scale,display.Work.Y+row*display.Scale,300*display.Scale,160*display.Scale);
+        for(double row=24;row+height<=display.Work.Height/display.Scale-8&&!found;row+=height+12)
+            for(double col=display.Work.Width/display.Scale-width-24;col>=8;col-=width+12) {
+                var r=new Rect(display.Work.X+col*display.Scale,display.Work.Y+row*display.Scale,width*display.Scale,height*display.Scale);
                 if(occupied.All(o=>r.Right<=o.X||r.X>=o.Right||r.Bottom<=o.Y||r.Y>=o.Bottom)) {x=col;y=row;found=true;break;}
             }
-        Add(new ClockState { Seconds=seconds,Acrylic=true,Monitor=display.Id,X=x,Y=y }); Save();
+        Add(new ClockState { Kind=kind,Seconds=seconds,Acrylic=true,Monitor=display.Id,X=x,Y=y }); Save();
     }
     internal void RemoveClock(ClockWindow window)
     {
@@ -282,7 +304,7 @@ internal sealed class Manager : IDisposable
         if(Native.FindWindow("Progman",null)==0) { if(++attempts<15)retry.Start();return; }
         recovering=true;
         var states=windows.Select(w=>w.State).ToArray();
-        foreach(var w in windows.ToArray()) if(Native.IsWindow(w.Handle))w.Close();
+        foreach(var w in windows.ToArray()) w.Close();
         windows.Clear(); foreach(var s in states)Add(s);
         recovering=false;tray.Visible=false;tray.Visible=true;
         if(mode=="desktop"&&windows.Any(w=>!w.IsVisible)&&++attempts<15) {recovering=true;retry.Start();}

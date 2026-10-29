@@ -1,6 +1,6 @@
 <Window x:Class="AxiWidgets.GalleryWindow" x:ClassModifier="internal"
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
-        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml" xmlns:local="clr-namespace:AxiWidgets"
         Title="AxiWidgets — Widget Gallery" Width="1000" Height="520"
         WindowStyle="None" ResizeMode="NoResize" ShowInTaskbar="False" Topmost="True"
         Background="Transparent" Foreground="White" FontFamily="Segoe UI Variable, Segoe UI"
@@ -48,13 +48,15 @@
                         <TextBlock Text="Clock"/>
                     </StackPanel>
                 </Button>
+                <Button x:Name="CalendarCategory" Style="{StaticResource FlatButton}" Height="47" Margin="0,6,0,0" Content="▦    Calendar" Click="SelectCalendar"/>
+                <Button x:Name="RemindersCategory" Style="{StaticResource FlatButton}" Height="47" Margin="0,6,0,0" Content="☑    Reminders" Click="SelectReminders"/>
             </StackPanel>
             <Grid Grid.Column="2">
                 <Grid.RowDefinitions><RowDefinition Height="*"/><RowDefinition Height="Auto"/></Grid.RowDefinitions>
                 <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
                     <StackPanel>
-                        <TextBlock Text="Clock" FontSize="22" FontWeight="SemiBold" Margin="0,0,0,5"/>
-                        <TextBlock Text="The time here, simply digital. Add a clock with or without seconds." Foreground="{StaticResource Muted}" TextWrapping="Wrap"/>
+                        <TextBlock x:Name="CategoryHeading" Text="Clock" FontSize="22" FontWeight="SemiBold" Margin="0,0,0,5"/>
+                        <TextBlock x:Name="CategoryDescription" Text="The time here, simply digital. Add a clock with or without seconds." Foreground="{StaticResource Muted}" TextWrapping="Wrap"/>
                         <WrapPanel x:Name="Previews" Margin="0,22,0,0">
                             <Button x:Name="DigitalPreview" Style="{StaticResource PreviewButton}" Click="AddDigital" AutomationProperties.Name="Add Digital Clock" ToolTip="Add Digital Clock">
                                 <StackPanel Width="232">
@@ -87,6 +89,14 @@
                                     </Grid>
                                     <TextBlock Text="With seconds" HorizontalAlignment="Center" Foreground="{StaticResource Muted}" FontSize="12" FontWeight="SemiBold" Margin="0,14,0,0"/>
                                 </StackPanel>
+                            </Button>
+                        </WrapPanel>
+                        <WrapPanel x:Name="SpecialPreviews" Visibility="Collapsed" Margin="0,22,0,0">
+                            <Button x:Name="CalendarPreviewButton" Style="{StaticResource PreviewButton}" Click="AddCalendar" AutomationProperties.Name="Add Calendar">
+                                <StackPanel><local:WidgetPreview Kind="Calendar" Width="216" Height="228"/><TextBlock Text="+ Calendar" HorizontalAlignment="Center" Margin="0,14,0,0"/></StackPanel>
+                            </Button>
+                            <Button x:Name="RemindersPreviewButton" Style="{StaticResource PreviewButton}" Click="AddReminders" AutomationProperties.Name="Add Reminders">
+                                <StackPanel><local:WidgetPreview Kind="Reminders" Width="216" Height="228"/><TextBlock Text="+ Reminders" HorizontalAlignment="Center" Margin="0,14,0,0"/></StackPanel>
                             </Button>
                         </WrapPanel>
                         <TextBlock x:Name="EmptySearch" Text="No widgets found" Foreground="{StaticResource Muted}" Margin="0,24,0,0" Visibility="Collapsed"/>

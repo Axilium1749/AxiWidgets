@@ -16,6 +16,8 @@
 #include <winrt/Windows.Graphics.DirectX.h>
 #include <string>
 #include <memory>
+#include <vector>
+#include <map>
 #include <unordered_map>
 
 using namespace winrt;
@@ -47,12 +49,14 @@ struct BlurEffect : implements<BlurEffect,IGraphicsEffect,IGraphicsEffectSource,
     }
 };
 
+struct DrawCommand {int kind;float x,y,w,h,r,size;UINT color;int align;wchar_t text[256];};
 struct Renderer
 {
     Windows::System::DispatcherQueueController queue{nullptr};
     Compositor compositor{nullptr};
     CompositionGraphicsDevice graphics{nullptr};CompositionEffectFactory blur{nullptr};
     com_ptr<ID3D11Device> d3d;com_ptr<ID2D1Factory1> factory;com_ptr<ID2D1Device> d2d;
+    std::map<int,com_ptr<IDWriteTextFormat>> formats;
     com_ptr<IDWriteFactory> write;com_ptr<IDWriteTextFormat> timeFormat,dateFormat;
     Renderer(){
         init_apartment(apartment_type::single_threaded);
@@ -71,7 +75,7 @@ struct Renderer
         for(auto format:{timeFormat.get(),dateFormat.get()}){format->SetTextAlignment(DWRITE_TEXT_ALIGNMENT_CENTER);format->SetParagraphAlignment(DWRITE_PARAGRAPH_ALIGNMENT_CENTER);}
     }
     ~Renderer(){
-        timeFormat=nullptr;dateFormat=nullptr;write=nullptr;graphics=nullptr;
+        formats.clear();timeFormat=nullptr;dateFormat=nullptr;write=nullptr;graphics=nullptr;
         d2d=nullptr;factory=nullptr;d3d=nullptr;blur=nullptr;compositor=nullptr;queue=nullptr;
         uninit_apartment();
     }
@@ -91,14 +95,15 @@ LRESULT CALLBACK CardProc(HWND hwnd,UINT msg,WPARAM w,LPARAM l){
 
 struct Card
 {
-    HWND hwnd{};float scale{};
+    HWND hwnd{};float scale{};float width=300,height=160;std::vector<DrawCommand> commands;
     Windows::UI::Composition::Desktop::DesktopWindowTarget target{nullptr};
     ContainerVisual root{nullptr};CompositionDrawingSurface surface{nullptr};CompositionSurfaceBrush textBrush{nullptr};
     CompositionColorBrush tint{nullptr},border{nullptr};
     CompositionLineGeometry vertical{nullptr},horizontal{nullptr};CompositionSpriteShape verticalShape{nullptr},horizontalShape{nullptr};
     std::wstring time,date;
     ~Card(){if(target)target.Root(nullptr);if(hwnd&&IsWindow(hwnd))DestroyWindow(hwnd);}
-    void Create(){
+    void Create(float w=300,float h=160){
+        width=w;height=h;
         HINSTANCE module=GetModuleHandle(nullptr);WNDCLASS cls{};cls.hInstance=module;cls.lpfnWndProc=CardProc;cls.lpszClassName=L"AxiWidgets.NativeCard";RegisterClass(&cls);
         hwnd=CreateWindowEx(WS_EX_NOREDIRECTIONBITMAP|WS_EX_NOACTIVATE|WS_EX_TOOLWINDOW,cls.lpszClassName,L"AxiWidgets — Digital Clock",WS_POPUP,0,0,300,160,nullptr,nullptr,module,nullptr);
         if(!hwnd)throw_last_error();
@@ -107,22 +112,22 @@ struct Card
         DWM_WINDOW_CORNER_PREFERENCE square=DWMWCP_DONOTROUND;DwmSetWindowAttribute(hwnd,DWMWA_WINDOW_CORNER_PREFERENCE,&square,sizeof square);
         auto& r=*renderer;auto c=r.compositor;
         check_hresult(c.as<ABI::Windows::UI::Composition::Desktop::ICompositorDesktopInterop>()->CreateDesktopWindowTarget(hwnd,FALSE,reinterpret_cast<ABI::Windows::UI::Composition::Desktop::IDesktopWindowTarget**>(put_abi(target))));
-        root=c.CreateContainerVisual();root.Size({300,160});target.Root(root);
-        auto clip=c.CreateRectangleClip();clip.Left(0);clip.Top(0);clip.Right(300);clip.Bottom(160);clip.TopLeftRadius({30,30});clip.TopRightRadius({30,30});clip.BottomLeftRadius({30,30});clip.BottomRightRadius({30,30});root.Clip(clip);
+        root=c.CreateContainerVisual();root.Size({width,height});target.Root(root);
+        auto clip=c.CreateRectangleClip();clip.Left(0);clip.Top(0);clip.Right(width);clip.Bottom(height);clip.TopLeftRadius({30,30});clip.TopRightRadius({30,30});clip.BottomLeftRadius({30,30});clip.BottomRightRadius({30,30});root.Clip(clip);
         auto effect=r.blur.CreateBrush();effect.SetSourceParameter(L"desktop",c.CreateHostBackdropBrush());
-        auto glass=c.CreateSpriteVisual();glass.Size({300,160});glass.Brush(effect);root.Children().InsertAtBottom(glass);
-        tint=c.CreateColorBrush({140,30,30,34});auto shade=c.CreateSpriteVisual();shade.Size({300,160});shade.Brush(tint);root.Children().InsertAtTop(shade);
-        textBrush=c.CreateSurfaceBrush();auto text=c.CreateSpriteVisual();text.Size({300,160});text.Brush(textBrush);root.Children().InsertAtTop(text);
-        auto geometry=c.CreateRoundedRectangleGeometry();geometry.Size({299.4f,159.4f});geometry.Offset({.3f,.3f});geometry.CornerRadius({29.7f,29.7f});
+        auto glass=c.CreateSpriteVisual();glass.Size({width,height});glass.Brush(effect);root.Children().InsertAtBottom(glass);
+        tint=c.CreateColorBrush({140,30,30,34});auto shade=c.CreateSpriteVisual();shade.Size({width,height});shade.Brush(tint);root.Children().InsertAtTop(shade);
+        textBrush=c.CreateSurfaceBrush();auto text=c.CreateSpriteVisual();text.Size({width,height});text.Brush(textBrush);root.Children().InsertAtTop(text);
+        auto geometry=c.CreateRoundedRectangleGeometry();geometry.Size({width-.6f,height-.6f});geometry.Offset({.3f,.3f});geometry.CornerRadius({29.7f,29.7f});
         border=c.CreateColorBrush({44,255,255,255});auto line=c.CreateSpriteShape(geometry);line.StrokeThickness(.6f);line.StrokeBrush(border);
-        auto outline=c.CreateShapeVisual();outline.Size({300,160});outline.Shapes().Append(line);
+        auto outline=c.CreateShapeVisual();outline.Size({width,height});outline.Shapes().Append(line);
         vertical=c.CreateLineGeometry();horizontal=c.CreateLineGeometry();verticalShape=c.CreateSpriteShape(vertical);horizontalShape=c.CreateSpriteShape(horizontal);
         for(auto shape:{verticalShape,horizontalShape}){shape.StrokeThickness(1);shape.StrokeBrush(c.CreateColorBrush({255,0,191,255}));outline.Shapes().Append(shape);}
         root.Children().InsertAtTop(outline);Dpi(1.f);
     }
     void Dpi(float value){
         if(value==scale)return;scale=value;root.Scale({scale,scale,1});
-        surface=renderer->graphics.CreateDrawingSurface({300*scale,160*scale},Windows::Graphics::DirectX::DirectXPixelFormat::B8G8R8A8UIntNormalized,Windows::Graphics::DirectX::DirectXAlphaMode::Premultiplied);
+        surface=renderer->graphics.CreateDrawingSurface({width*scale,height*scale},Windows::Graphics::DirectX::DirectXPixelFormat::B8G8R8A8UIntNormalized,Windows::Graphics::DirectX::DirectXAlphaMode::Premultiplied);
         textBrush.Surface(surface);Draw();
     }
     void Draw(){
@@ -131,8 +136,24 @@ struct Card
         try {
             context->SetDpi(96*scale,96*scale);context->SetTransform(D2D1::Matrix3x2F::Translation(offset.x/scale,offset.y/scale));context->Clear(D2D1::ColorF(0,0,0,0));
             com_ptr<ID2D1SolidColorBrush> brush;check_hresult(context->CreateSolidColorBrush(D2D1::ColorF(D2D1::ColorF::White),brush.put()));
+            if(commands.empty()) {
             context->DrawTextW(time.c_str(),static_cast<UINT32>(time.size()),renderer->timeFormat.get(),D2D1::RectF(0,date.empty()?0.f:24.f,300,date.empty()?160.f:110.f),brush.get());
             if(!date.empty()){brush->SetOpacity(.65f);context->DrawTextW(date.c_str(),static_cast<UINT32>(date.size()),renderer->dateFormat.get(),D2D1::RectF(0,108,300,132),brush.get());}
+            } else for(auto const& cmd:commands){
+                brush->SetColor(D2D1::ColorF(cmd.color&0xffffff,((cmd.color>>24)&255)/255.f));brush->SetOpacity(1);
+                auto rect=D2D1::RectF(cmd.x,cmd.y,cmd.x+cmd.w,cmd.y+cmd.h);
+                auto rr=D2D1::RoundedRect(rect,cmd.r,cmd.r);
+                if(cmd.kind==0)context->FillRoundedRectangle(rr,brush.get());
+                else if(cmd.kind==1)context->DrawRoundedRectangle(rr,brush.get(),cmd.size);
+                else if(cmd.kind==3)context->DrawLine({cmd.x,cmd.y},{cmd.x+cmd.w,cmd.y+cmd.h},brush.get(),cmd.size);
+                else {
+                    int key=static_cast<int>(cmd.size*10);
+                    auto& format=renderer->formats[key];
+                    if(!format){check_hresult(renderer->write->CreateTextFormat(L"Segoe UI",nullptr,DWRITE_FONT_WEIGHT_NORMAL,DWRITE_FONT_STYLE_NORMAL,DWRITE_FONT_STRETCH_NORMAL,cmd.size,L"",format.put()));format->SetParagraphAlignment(DWRITE_PARAGRAPH_ALIGNMENT_CENTER);format->SetWordWrapping(DWRITE_WORD_WRAPPING_NO_WRAP);}
+                    format->SetTextAlignment(static_cast<DWRITE_TEXT_ALIGNMENT>(cmd.align));
+                    context->DrawTextW(cmd.text,static_cast<UINT32>(wcsnlen(cmd.text,256)),format.get(),rect,brush.get(),D2D1_DRAW_TEXT_OPTIONS_CLIP);
+                }
+            }
         }catch(...){drawing->EndDraw();throw;}
         check_hresult(drawing->EndDraw());
     }
@@ -152,8 +173,16 @@ extern "C" __declspec(dllexport) HRESULT __cdecl AxiCard_SetStyle(HWND hwnd,BYTE
     return Guard([&]{auto& card=GetCard(hwnd);card.tint.Color({alpha,static_cast<BYTE>(rgb>>16),static_cast<BYTE>(rgb>>8),static_cast<BYTE>(rgb)});card.border.Color(editing?Windows::UI::Color{100,130,190,255}:Windows::UI::Color{44,255,255,255});});
 }
 extern "C" __declspec(dllexport) HRESULT __cdecl AxiCard_SetGuides(HWND hwnd,float x,float y) noexcept {
-    return Guard([&]{auto& card=GetCard(hwnd);card.vertical.Start({x,3});card.vertical.End({x,157});card.verticalShape.StrokeThickness(x<0?0.f:1.f);card.horizontal.Start({3,y});card.horizontal.End({297,y});card.horizontalShape.StrokeThickness(y<0?0.f:1.f);});
+    return Guard([&]{auto& card=GetCard(hwnd);card.vertical.Start({x,3});card.vertical.End({x,card.height-3});card.verticalShape.StrokeThickness(x<0?0.f:1.f);card.horizontal.Start({3,y});card.horizontal.End({card.width-3,y});card.horizontalShape.StrokeThickness(y<0?0.f:1.f);});
 }
 extern "C" __declspec(dllexport) HRESULT __cdecl AxiCard_Destroy(HWND hwnd) noexcept {return Guard([&]{cards.erase(hwnd);});}
 extern "C" __declspec(dllexport) HRESULT __cdecl AxiCard_Shutdown() noexcept {return Guard([]{cards.clear();renderer.reset();});}
 
+
+extern "C" __declspec(dllexport) HRESULT __cdecl AxiCard_CreateWidget(HWND* result,float width,float height) noexcept {
+    if(!result)return E_POINTER;*result=nullptr;
+    return Guard([&]{if(!renderer)renderer=std::make_unique<Renderer>();auto card=std::make_unique<Card>();card->Create(width,height);*result=card->hwnd;cards.emplace(card->hwnd,std::move(card));});
+}
+extern "C" __declspec(dllexport) HRESULT __cdecl AxiCard_SetContent(HWND hwnd,DrawCommand const* commands,int count) noexcept {
+    return Guard([&]{if(count<0||count>1000||(!commands&&count))throw hresult_invalid_argument();auto& card=GetCard(hwnd);card.commands.assign(commands,commands+count);card.Draw();});
+}
