@@ -2,7 +2,7 @@ namespace AxiWidgets.Core;
 
 public sealed record ScrollParameters(double Resistance=0.55,double RubberLength=72,double Friction=9,
     double SpringStiffness=210,double SpringDamping=27,double MaxVelocity=1800,double WheelImpulse=5,
-    double WheelCooldown=.3,double WheelReturnFraction=.65);
+    double WheelOverscrollImpulse=900,double WheelCoastTime=.24,double WheelCoastDamping=12);
 
 // Coordinates and velocity are DIP and DIP/second; no UI or platform dependencies.
 public sealed class ScrollPhysics(ScrollParameters? parameters=null)
@@ -15,8 +15,7 @@ public sealed class ScrollPhysics(ScrollParameters? parameters=null)
     public bool Moving=>!Dragging&&(Math.Abs(Velocity)>.5||Math.Abs(Position-(springTarget??Math.Clamp(Position,0,Maximum)))>.05);
     private double? springTarget;
     private double origin,lastTime;
-    private double modelTime,lastWheelOverscroll=double.NegativeInfinity,wheelPeak;
-    private int wheelDirection;
+    private double modelTime,wheelReturnStarted;
     private bool wheelMotion,wheelArmOnArrival;
     public void Resize(double maximum){Maximum=Math.Max(0,maximum);if(springTarget.HasValue)springTarget=Math.Clamp(springTarget.Value,0,Maximum);}
     public void Jump(double position){Position=Math.Clamp(position,0,Maximum);Velocity=0;Dragging=false;springTarget=null;wheelMotion=false;}
@@ -38,13 +37,12 @@ public sealed class ScrollPhysics(ScrollParameters? parameters=null)
         int direction=Math.Sign(-delta);
         bool outward=Position<0?direction<0:Position>Maximum?direction>0:
             (direction<0&&(Position<=0||springTarget==0))||(direction>0&&(Position>=Maximum||springTarget==Maximum));
-        if(outward){
-            double stretch=direction<0?Math.Max(0,-Position):Math.Max(0,Position-Maximum);
-            if(wheelDirection==direction&&(modelTime-lastWheelOverscroll<Parameters.WheelCooldown
-                ||stretch>wheelPeak*Parameters.WheelReturnFraction||direction*Velocity>.5))return false;
-            wheelDirection=direction;lastWheelOverscroll=modelTime;wheelPeak=stretch;
-        }
-        wheelMotion=true;wheelArmOnArrival=!outward;springTarget=null;Velocity=Math.Clamp(Velocity-delta*Parameters.WheelImpulse,-Parameters.MaxVelocity,Parameters.MaxVelocity);return true;
+        double stretch=Math.Abs(Position-Math.Clamp(Position,0,Maximum));
+        double boost=outward?direction*Parameters.WheelOverscrollImpulse*Math.Min(1,Math.Abs(delta)/120):0;
+        double impulse=-delta*Parameters.WheelImpulse+boost;
+        if(outward){wheelReturnStarted=modelTime;impulse/=1+Math.Pow(stretch/Parameters.RubberLength,2);}
+        wheelMotion=true;wheelArmOnArrival=!outward;springTarget=null;
+        Velocity=Math.Clamp(Velocity+impulse,-Parameters.MaxVelocity,Parameters.MaxVelocity);return true;
     }
     public void Step(double elapsed)
     {
@@ -53,13 +51,15 @@ public sealed class ScrollPhysics(ScrollParameters? parameters=null)
         while(remaining>0){double dt=Math.Min(remaining,1.0/240);remaining-=dt;
             modelTime+=dt;
             double bound=Math.Clamp(Position,0,Maximum);
-            if(wheelMotion&&Position!=bound){
-                int direction=Math.Sign(Position-bound);
-                if(wheelArmOnArrival||wheelDirection!=direction){wheelDirection=direction;lastWheelOverscroll=modelTime;wheelPeak=0;wheelArmOnArrival=false;}
-                wheelPeak=Math.Max(wheelPeak,Math.Abs(Position-bound));
-            }
+            if(wheelMotion&&Position!=bound&&wheelArmOnArrival){wheelReturnStarted=modelTime;wheelArmOnArrival=false;}
             if(!springTarget.HasValue&&Position!=bound)springTarget=bound;
-            if(springTarget.HasValue)Velocity+=(-Parameters.SpringStiffness*(Position-springTarget.Value)-Parameters.SpringDamping*Velocity)*dt;
+            if(springTarget.HasValue){
+                double ramp=wheelMotion?Math.Clamp((modelTime-wheelReturnStarted)/Parameters.WheelCoastTime,0,1):1;
+                ramp=ramp*ramp*(3-2*ramp);
+                double stiffness=Parameters.SpringStiffness*(wheelMotion?.25+.75*ramp:1);
+                double damping=wheelMotion?Parameters.WheelCoastDamping+(Parameters.SpringDamping-Parameters.WheelCoastDamping)*ramp:Parameters.SpringDamping;
+                Velocity+=(-stiffness*(Position-springTarget.Value)-damping*Velocity)*dt;
+            }
             else Velocity*=Math.Exp(-Parameters.Friction*dt);
             Position+=Velocity*dt;
         }
