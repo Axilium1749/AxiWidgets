@@ -9,6 +9,8 @@ namespace AxiWidgets;
 internal sealed partial class Manager
 {
     private ContextMenu? trayMenu;
+    private readonly Autostart autostart=new();
+    private MenuItem? autostartItem;
     private void TrayClicked(object? sender,Forms.MouseEventArgs e)
     {
         if(disposed)return;
@@ -27,10 +29,18 @@ internal sealed partial class Manager
             var open=new MenuItem {Header="Открыть меню виджетов"};
             open.Click+=(_,_)=>{trayMenu.IsOpen=false;OpenGallery();};
             var exit=new MenuItem {Header="Выход"};exit.Click+=(_,_)=>ExitApplication();
+            autostartItem=new MenuItem {Header="Автозапуск",IsCheckable=true,StaysOpenOnClick=true,Tag="Autostart"};
+            autostartItem.Click+=(_,_)=>{
+                try{autostart.SetEnabled(autostartItem.IsChecked);}
+                catch(Exception e){Log.Write("Autostart change failed: "+e);MessageBox.Show("Не удалось изменить автозапуск: "+e.Message,"AxiWidgets",MessageBoxButton.OK,MessageBoxImage.Warning);}
+                autostartItem.IsChecked=autostart.Enabled;
+            };
             trayMenu.Items.Add(open);
+            trayMenu.Items.Add(autostartItem);
             trayMenu.Items.Add(new Separator {Style=(Style)trayMenu.FindResource("WidgetMenuSeparator")});
             trayMenu.Items.Add(exit);
         }
+        autostartItem!.IsChecked=autostart.Enabled;
         Native.GetCursorPos(out var cursor);var display=Display.For(new(cursor.X,cursor.Y,1,1));
         trayMenu.IsOpen=false;trayMenu.Placement=PlacementMode.AbsolutePoint;
         trayMenu.HorizontalOffset=cursor.X/display.Scale;trayMenu.VerticalOffset=cursor.Y/display.Scale;
@@ -42,7 +52,7 @@ internal sealed partial class Manager
             Native.SetWindowPos(source.Handle,-1,x,y,0,0,1|0x10);
         }
     }
-    private void ExitApplication()
+    internal void ExitApplication()
     {
         if(disposed)return;
         if(trayMenu!=null)trayMenu.IsOpen=false;

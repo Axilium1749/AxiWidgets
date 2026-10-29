@@ -29,5 +29,17 @@ public sealed class ReminderStore
     public bool Add(string text){text=text.Trim();if(text.Length==0)return false;Items.Insert(0,new(){Text=text.Length>200?text[..200]:text});Save();return true;}
     public void Toggle(Guid id){var item=Items.Find(x=>x.Id==id);if(item==null)return;Items.Remove(item);item.Done=!item.Done;int index=Items.FindIndex(x=>x.Done);Items.Insert(index<0?Items.Count:index,item);Save();}
     public void Remove(Guid id){if(Items.RemoveAll(x=>x.Id==id)>0)Save();}
-    private void Save(){Directory.CreateDirectory(Path.GetDirectoryName(Path.GetFullPath(path))!);File.WriteAllText(path+".tmp",JsonSerializer.Serialize(Items));File.Move(path+".tmp",path,true);Changed?.Invoke();}
+    private void Save(){
+        Directory.CreateDirectory(Path.GetDirectoryName(Path.GetFullPath(path))!);
+        string json=JsonSerializer.Serialize(Items);
+        for(int attempt=0;;attempt++){
+            try{File.WriteAllText(path+".tmp",json);File.Move(path+".tmp",path,true);break;}
+            catch(Exception e) when(attempt<5&&(e is IOException or UnauthorizedAccessException)){
+                // Indexers and antivirus may briefly hold a file during replacement.
+                // Permanent failures still propagate after a bounded 310 ms retry.
+                Thread.Sleep(10<<attempt);
+            }
+        }
+        Changed?.Invoke();
+    }
 }

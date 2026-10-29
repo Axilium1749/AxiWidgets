@@ -26,3 +26,5 @@ The hidden broadcast listener is independent of desktop-owned widgets. Explorer 
 ## Build
 
 `scripts/toolchain.lock.json` pins the complete local toolchain. Bootstrap verifies archive hashes and extracts into `.tools/` without installing system components. MSBuild invokes the native build and copies the DLL beside the managed output. No experiment, external NuGet package or absolute developer path is required.
+
+User data defaults to the current user's LocalApplicationData/AxiWidgets. Explicit --data overrides remain isolated for diagnostics. Autostart is a per-user Run entry. The installer uses the --shutdown event signal to request a graceful save/exit before upgrade or removal; it does not kill widget processes.

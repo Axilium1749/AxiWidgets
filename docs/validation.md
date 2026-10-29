@@ -13,6 +13,8 @@ Before a public binary release, manually verify:
 - Explorer restart and bounded recovery without stranded input or duplicate widgets.
 - Mixed-DPI displays, negative display origins, hotplug and sleep/resume.
 - Physical mouse/precision touchpad scrolling, reverse-direction spring interruption and high-refresh animation quality.
-- Clean installation/update/uninstall and autostart once those features exist.
+- Clean installation/update/uninstall and actual sign-in autostart on target machines.
 
 Historical per-machine CPU/GPU samples and experimental host screenshots are archived locally and are not current performance claims. No full hardware/long-idle validation is implied by a successful build or smoke run.
+
+Installer automation has verified a separate test AppId: self-contained launch without a configured .NET installation, optional Run entry and shortcuts, update while the app is running, graceful shutdown, and uninstall preserving data while removing its Run entry and shortcuts. Smoke checks autostart enable/disable in an isolated registry key and non-destructive legacy data migration. A real Windows sign-out/sign-in was not performed.

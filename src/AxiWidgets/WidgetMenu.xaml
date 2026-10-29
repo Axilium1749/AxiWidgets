@@ -41,6 +41,7 @@
                                         <Ellipse x:Name="Thumb" Width="10" Height="10" Fill="#E0E0E5" HorizontalAlignment="Left" Margin="3,0"/>
                                     </Grid>
                                     <TextBlock x:Name="RemoveIcon" Grid.Column="1" Text="×" FontSize="22" Foreground="{TemplateBinding Foreground}" HorizontalAlignment="Right" VerticalAlignment="Center" Margin="0,-2,5,0" Visibility="Collapsed"/>
+                                    <TextBlock x:Name="CheckIcon" Grid.Column="1" Text="✓" FontSize="17" Foreground="#65A7FF" HorizontalAlignment="Right" VerticalAlignment="Center" Margin="0,0,5,0" Visibility="Collapsed"/>
                                 </Grid>
                             </Border>
                             <ControlTemplate.Triggers>
@@ -51,6 +52,11 @@
                                     <Setter TargetName="Thumb" Property="Fill" Value="White"/>
                                 </Trigger>
                                 <Trigger Property="IsHighlighted" Value="True"><Setter TargetName="Row" Property="Background" Value="#44444D"/></Trigger>
+                                <Trigger Property="Tag" Value="Autostart"><Setter TargetName="Toggle" Property="Visibility" Value="Collapsed"/></Trigger>
+                                <MultiTrigger>
+                                    <MultiTrigger.Conditions><Condition Property="Tag" Value="Autostart"/><Condition Property="IsChecked" Value="True"/></MultiTrigger.Conditions>
+                                    <Setter TargetName="CheckIcon" Property="Visibility" Value="Visible"/>
+                                </MultiTrigger>
                                 <Trigger Property="Tag" Value="Remove">
                                     <Setter Property="Foreground" Value="#FF929B"/>
                                     <Setter TargetName="RemoveIcon" Property="Visibility" Value="Visible"/>

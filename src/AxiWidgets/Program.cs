@@ -38,17 +38,22 @@ internal static class Program
 {
     [STAThread] private static void Main(string[] args)
     {
+        if(args.Contains("--shutdown")){
+            if(EventWaitHandle.TryOpenExisting(@"Local\AxiWidgets.Exit",out var signal)){using(signal)signal.Set();}return;
+        }
         using var mutex=new Mutex(true,@"Local\AxiWidgets.Manager",out bool created);
         if(!created) return;
         var app=new Application { ShutdownMode=ShutdownMode.OnExplicitShutdown };
         string mode=args.FirstOrDefault(x=>x.StartsWith("--poc="))?.Split('=')[1]??"desktop";
         if(mode is not ("desktop" or "normal" or "noactivate")) return;
-        Log.Folder=Path.GetFullPath(args.FirstOrDefault(x=>x.StartsWith("--data="))?[7..]??Path.Combine(AppContext.BaseDirectory,".local"));
+        Log.Folder=UserData.Resolve(args);
         app.DispatcherUnhandledException+=(_,e)=>Log.Write(e.Exception.ToString());
         Log.Write($"Starting OS={Environment.OSVersion} runtime={Environment.Version} mode={mode}");
         using var manager=new Manager(mode);
+        using var exitSignal=new EventWaitHandle(false,EventResetMode.AutoReset,@"Local\AxiWidgets.Exit");
+        var exitWait=ThreadPool.RegisterWaitForSingleObject(exitSignal,(_,_)=>app.Dispatcher.BeginInvoke(()=>manager.ExitApplication()),null,Timeout.Infinite,false);
         app.Startup+=(_,_)=> { manager.Start(); if(args.Contains("--smoke")) app.Dispatcher.BeginInvoke(()=>manager.Smoke()); else if(args.Contains("--accent-probe")) app.Dispatcher.BeginInvoke(()=>manager.AccentProbe()); else if(args.Contains("--live-probe")) app.Dispatcher.BeginInvoke(async ()=>await manager.LiveProbe()); else if(args.Contains("--gallery")) app.Dispatcher.BeginInvoke(()=>manager.OpenGallery()); };
-        app.Run();
+        try{app.Run();}finally{exitWait.Unregister(null);}
     }
 }
 internal sealed partial class Manager : IDisposable
@@ -87,6 +92,8 @@ internal sealed partial class Manager : IDisposable
         Microsoft.Win32.SystemEvents.TimeChanged+=TimeChanged;
         Microsoft.Win32.SystemEvents.UserPreferenceChanged+=PreferencesChanged;
         Microsoft.Win32.SystemEvents.PowerModeChanged+=PowerChanged;
+        // Run-key startup can precede Explorer's desktop icon host at sign-in.
+        if(mode=="desktop"&&windows.Any(w=>!w.IsVisible)){attempts=0;recovering=true;retry.Start();}
         Log.Write($"Manager ready {watch.Elapsed.TotalMilliseconds:F1}ms; clocks={windows.Count}");
     }
     private void Add(ClockState state)
@@ -224,11 +231,26 @@ internal sealed partial class Manager : IDisposable
             if(gallery?.IsVisible!=true)throw new Exception("Left tray click no longer opens gallery");
             FinishEditing();
             TrayClicked(tray,new Forms.MouseEventArgs(Forms.MouseButtons.Right,1,0,0,0));
-            ((System.Windows.Controls.MenuItem)trayMenu.Items[2]).RaiseEvent(new RoutedEventArgs(System.Windows.Controls.MenuItem.ClickEvent));
+            var testPath=@"Software\AxiWidgets.AutostartTest."+Guid.NewGuid().ToString("N");
+            try{
+                var isolated=new Autostart(testPath);
+                isolated.SetEnabled(true);if(!isolated.Enabled)throw new Exception("Autostart enable failed");
+                isolated.SetEnabled(false);if(isolated.Enabled)throw new Exception("Autostart disable failed");
+            }finally{Microsoft.Win32.Registry.CurrentUser.DeleteSubKeyTree(testPath,false);}
+            string migrationRoot=Path.Combine(Log.Folder,"migration-test");
+            string legacy=Path.Combine(migrationRoot,"old"),current=Path.Combine(migrationRoot,"current");
+            Directory.CreateDirectory(legacy);Directory.CreateDirectory(current);
+            File.WriteAllText(Path.Combine(legacy,"reminders.json"),"[]");File.WriteAllText(Path.Combine(legacy,"layout.json"),"[]");
+            UserData.MigrateLegacy(current,legacy);
+            if(!File.Exists(Path.Combine(current,"reminders.json"))||!File.Exists(Path.Combine(current,"layout.json")))throw new Exception("Legacy data migration failed");
+            File.WriteAllText(Path.Combine(current,"reminders.json"),"preserved");UserData.MigrateLegacy(current,legacy);
+            if(File.ReadAllText(Path.Combine(current,"reminders.json"))!="preserved")throw new Exception("Data migration overwrote tasks");
+            Log.Write("AUTOSTART/DATA SMOKE PASS: isolated registry toggle and quoted command; legacy settings migration preserves existing data.");
+            trayMenu.Items.OfType<System.Windows.Controls.MenuItem>().Single(x=>Equals(x.Header,"Выход")).RaiseEvent(new RoutedEventArgs(System.Windows.Controls.MenuItem.ClickEvent));
             Log.Write("TRAY SMOKE PASS: styled right-click menu, open gallery action, left-click gallery preserved, Exit requests full shutdown and saves layout.");
         } catch(Exception e) {Log.Write("SMOKE FAIL: "+e);Environment.ExitCode=1;}
         gallery?.ShutdownGallery(); gallery=null;
-        Application.Current.Shutdown();
+        Application.Current.Shutdown(Environment.ExitCode);
     }
     internal async System.Threading.Tasks.Task LiveProbe()
     {

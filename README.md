@@ -30,7 +30,15 @@ $env:DOTNET_ROOT = Join-Path $PWD '.tools/dotnet'
 ./src/AxiWidgets/bin/Release/net10.0-windows/AxiWidgets.exe --gallery
 ```
 
-Close an existing instance first; the manager allows only one instance. An installer and autostart option are not implemented yet.
+Close an existing instance first; the manager allows only one instance. The installer includes the .NET runtime; installed users do not need the SDK.
+
+## Installer and autostart
+
+Run `./scripts/Build-Installer.ps1` after bootstrap. It creates `artifacts/installer/AxiWidgets-Setup-0.1.0-x64.exe` with the .NET 10.0.14 runtime included. The first publish downloads pinned runtime packs from NuGet; the Inno Setup compiler is downloaded with a verified SHA-256 and prepared in portable mode under `.tools/inno`. The compiler version/hash is in `installer/compiler.lock.json`.
+
+Installation is per user under `%LOCALAPPDATA%\Programs\AxiWidgets`, without administrator rights. The wizard offers a desktop shortcut and autostart, both optional. The Start menu shortcut and Windows uninstall entry are included. Updates ask the running app to save and exit. Uninstall removes the program, shortcuts and its autostart registration, while preserving user data. The current installer is unsigned.
+
+Right-click the tray icon and check **Автозапуск** to enable launch on sign-in; uncheck it to disable. This registers the quoted executable path with `--startup` in the current user's Run key. Autostart opens desktop widgets without showing the gallery. No system-wide service or scheduled task is installed.
 
 ## Using widgets
 
@@ -47,7 +55,7 @@ Cards use a live HostBackdropBrush, native Gaussian blur, 55% `#1E1E22` tint, a 
 
 ## Local data and diagnostics
 
-The current development build writes `.local/` beside the executable: `layout.json`, `appearance.json`, shared `reminders.json` and `diagnostics.log`. Override with `--data=C:\path\to\folder`. These files, build outputs, SDK caches, dumps and local credentials are excluded from Git. A future installed build will need a per-user data location.
+Data is stored in `%LOCALAPPDATA%\AxiWidgets`: `layout.json`, `appearance.json`, shared `reminders.json` and `diagnostics.log`. Override with `--data=C:\path\to\folder`. These files, build outputs, SDK caches, dumps and local credentials are excluded from Git. On first use, legacy settings/tasks beside the executable in `.local/` are copied without deleting the old data or overwriting existing user data.
 
 After closing the normal app, run the isolated native smoke harness:
 
