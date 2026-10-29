@@ -10,13 +10,13 @@ internal sealed partial class ClockWindow
 {
     internal float WidgetWidth=>State.Kind=="Clock"?300:364;
     internal float WidgetHeight=>State.Kind=="Clock"?160:384;
-    private int scroll;
+    private double scroll;
     private System.Windows.Forms.TextBox? input;
     private InputMessages? inputMessages;
     private nint previousForeground;
     private (double X,double Y) LocalPointer(){Native.GetCursorPos(out var p);var r=Native.Bounds(Handle);var scale=r.Width/WidgetWidth;return((p.X-r.X)/scale,(p.Y-r.Y)/scale);}
     private bool InteractivePoint(){var(x,y)=LocalPointer();return input!=null||x>=16&&x<=348&&((y>=86&&y<=308)||(y>=322&&y<=367));}
-    private void Scroll(short delta){if(Editing||State.Kind!="Reminders")return;scroll=Math.Clamp(scroll+(delta<0?1:-1),0,Math.Max(0,manager.Reminders.Items.Count-4));RefreshClock();}
+    private void Scroll(short delta){if(Editing||State.Kind!="Reminders")return;EndInput();ResizeScroll();scrollPhysics.Wheel(delta);StartScrollMotion();}
     private void ReminderClick()
     {
         if(State.Kind!="Reminders")return;
@@ -24,7 +24,7 @@ internal sealed partial class ClockWindow
         if(y>=322&&y<=367&&x>=18&&x<=346){BeginInput();return;}
         EndInput();
         if(y<92||y>=300)return;
-        int index=scroll+(int)(y-92)/52;if(index>=manager.Reminders.Items.Count)return;
+        int index=(int)Math.Floor((y-92+scroll)/52);if(index<0||index>=manager.Reminders.Items.Count)return;
         var id=manager.Reminders.Items[index].Id;
         try{if(x>=30&&x<=64)manager.Reminders.Toggle(id);else if(x>=306&&x<=336)manager.Reminders.Remove(id);}
         catch(Exception e){Log.Write("Reminder save failed: "+e);MessageBox.Show("Could not save reminders. Please check the data folder.","AxiWidgets");}
@@ -101,17 +101,16 @@ internal sealed partial class ClockWindow
         var added=new System.Collections.Generic.List<Guid>();
         try {
             for(int i=0;i<6;i++){manager.Reminders.Add("Scroll test "+i);added.Add(manager.Reminders.Items[0].Id);}
-            for(int i=0;i<manager.Reminders.Items.Count;i++)Scroll(-120);
-            if(scroll!=manager.Reminders.Items.Count-4)throw new InvalidOperationException("Scroll range failed");
-            var id=manager.Reminders.Items[scroll].Id;
+            ResizeScroll();scrollPhysics.Jump(scrollPhysics.Maximum);scroll=scrollPhysics.Position;RefreshClock();
+            var id=manager.Reminders.Items[(int)(scroll/52)].Id;
             Native.SetCursorPos((int)(r.X+45*scale),(int)(r.Y+117*scale));ReminderClick();
             if(!manager.Reminders.Items.Find(x=>x.Id==id)!.Done)throw new InvalidOperationException("Checkbox hit failed");
-            scroll=manager.Reminders.Items.FindIndex(x=>x.Id==id);RefreshClock();
-            int row=manager.Reminders.Items.FindIndex(x=>x.Id==id)-scroll;
+            scroll=manager.Reminders.Items.FindIndex(x=>x.Id==id)*52;RefreshClock();
+            int row=manager.Reminders.Items.FindIndex(x=>x.Id==id)-(int)(scroll/52);
             Native.SetCursorPos((int)(r.X+45*scale),(int)(r.Y+(117+row*52)*scale));
             ReminderClick();if(manager.Reminders.Items.Find(x=>x.Id==id)!.Done)throw new InvalidOperationException("Checkbox reset failed");
-            scroll=Math.Min(manager.Reminders.Items.FindIndex(x=>x.Id==id),Math.Max(0,manager.Reminders.Items.Count-4));RefreshClock();
-            row=manager.Reminders.Items.FindIndex(x=>x.Id==id)-scroll;
+            scroll=Math.Min(manager.Reminders.Items.FindIndex(x=>x.Id==id)*52,Math.Max(0,(manager.Reminders.Items.Count-4)*52));RefreshClock();
+            row=manager.Reminders.Items.FindIndex(x=>x.Id==id)-(int)(scroll/52);
             Native.SetCursorPos((int)(r.X+320*scale),(int)(r.Y+(117+row*52)*scale));ReminderClick();
             if(manager.Reminders.Items.Exists(x=>x.Id==id))throw new InvalidOperationException("Delete hit failed");
         }finally{foreach(var id in added)manager.Reminders.Remove(id);Native.SetCursorPos(saved.X,saved.Y);}

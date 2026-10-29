@@ -27,7 +27,7 @@ internal sealed class WidgetDrawing
         for(int i=0;i<42;i++){float x=26+i%7*44,y=174+i/7*29;var day=days[i];if(day.Today)d.C(0,x+5,y+1,34,27,Orange,6);d.Text(cal.GetDayOfMonth(day.Date).ToString(culture),x,y,44,29,14,day.CurrentMonth?White:0x65FFFFFF,2);}
         return d;
     }
-    internal static WidgetDrawing Reminders(IReadOnlyList<ReminderItem> items,int offset,string? draft=null,int caret=0,HashSet<Guid>? retained=null,HashSet<Guid>? added=null)
+    internal static WidgetDrawing Reminders(IReadOnlyList<ReminderItem> items,double offset,string? draft=null,int caret=0,HashSet<Guid>? retained=null,HashSet<Guid>? added=null)
     {
         var d=new WidgetDrawing();d.Base(Yellow);d.Panel(16,18,332,58);
         d.C(0,26,29,34,34,Yellow,17);for(int i=0;i<3;i++)d.Line(37,40+i*5,i==2?7:12,0,0xFF252525,2);
@@ -35,12 +35,13 @@ internal sealed class WidgetDrawing
         d.Panel(16,86,332,222);
         if(items.Count==0)d.Text("No reminders yet",40,160,284,40,16,Muted,2);
         bool animated=retained!=null;
-        if(animated)d.C(6,0,offset*52,0,0,0);
+        double first=offset/52;
+        if(animated)d.C(6,0,(float)offset,0,0,0);
         for(int row=0;row<items.Count;row++){
             var item=items[row];
-            if(animated){if((row<offset-6||row>offset+10)&&!retained!.Contains(item.Id))continue;}
-            else if(row<offset||row>=offset+4)continue;
-            float y=92+(animated?row:row-offset)*52;
+            if(animated){if((row<first-6||row>first+10)&&!retained!.Contains(item.Id))continue;}
+            else if(row<first||row>=first+4)continue;
+            float y=92+(animated?row:row-(float)first)*52;
             if(animated)d.C(4,0,y,364,52,added!=null&&added.Contains(item.Id)?1u:0u,text:item.Id.ToString());
             d.C(item.Done?0:1,36,y+15,20,20,item.Done?Yellow:0xA6FFFFFF,5,item.Done?1:1.5f);
             if(item.Done){d.Line(41,y+25,4,4,0xFF242424,2);d.Line(45,y+29,7,-9,0xFF242424,2);}
@@ -50,7 +51,8 @@ internal sealed class WidgetDrawing
             if(row+1<items.Count)d.Line(29,y+51,306,0);
             if(animated)d.C(5,0,0,0,0,0);
         }
-        if(items.Count>4){float h=196f*4/items.Count,y=98+(196-h)*offset/(items.Count-4);d.C(0,341,y,2,h,0x60FFFFFF,1);}
+        if(animated)d.C(7,341,98,2,items.Count>4?Math.Max(12,196f*4/items.Count):196,0x60FFFFFF,Math.Max(0,items.Count*52-208));
+        else if(items.Count>4){float h=196f*4/items.Count,y=98+(196-h)*(float)Math.Clamp(first,0,items.Count-4)/(items.Count-4);d.C(0,341,y,2,h,0x60FFFFFF,1);}
         if(draft!=null){caret=Math.Clamp(caret,0,draft.Length);int start=Math.Max(0,caret-28);draft=draft[start..].Insert(caret-start,"│");}
         d.Panel(18,322,328,45);d.Text("+",34,322,26,45,28,Yellow);d.Text(draft==null?"Add a reminder":draft,76,322,258,45,15,draft==null?Muted:White);
         return d;

@@ -215,6 +215,8 @@ internal sealed class Manager : IDisposable
             Reminders.Toggle(created);if(!new ReminderStore(Path.Combine(Log.Folder,"reminders.json")).Items.Single(x=>x.Id==created).Done)throw new Exception("Task state not saved");
             Reminders.Toggle(created);Reminders.Remove(created);
             windows[^1].SmokeReminderActions();
+            windows[^1].SmokePhysicalScroll();
+            Log.Write("SCROLL SMOKE PASS: short 1/2-task rubber band; 12-task drag, inertia and fine wheel; click threshold; captured list stays in fixed HWND; spring settles and idle timer stops.");
             foreach(var widget in windows.Skip(widgetStart)){
                 widget.SmokeDrag();
                 var bounds=Native.Bounds(widget.Handle);double scale=Display.For(bounds).Scale;

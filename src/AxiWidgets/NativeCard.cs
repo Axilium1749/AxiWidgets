@@ -6,6 +6,7 @@ namespace AxiWidgets;
 internal static class NativeCard
 {
     private const string Library="AxiWidgets.Native.dll";
+    [DllImport(Library,CallingConvention=CallingConvention.Cdecl,EntryPoint="AxiCard_SetScroll")] internal static extern int SetScroll(nint hwnd,float position);
     [StructLayout(LayoutKind.Sequential,CharSet=CharSet.Unicode)]
     internal struct Command {
         public int Kind;public float X,Y,W,H,R,Size;public uint Color;public int Align;

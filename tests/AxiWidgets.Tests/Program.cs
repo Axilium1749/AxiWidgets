@@ -82,4 +82,25 @@ Check("reminders active first and newest completion first",()=>{
         loaded.Toggle(b);if(string.Join("",loaded.Items.Select(x=>x.Text))!="DCBA"||loaded.Items[2].Done)throw new Exception("Reactivate placement");
     }finally{if(File.Exists(path))File.Delete(path);if(Directory.Exists(folder))Directory.Delete(folder);}
 });
-Console.WriteLine($"{passed}/26 passed");
+Check("short lists rubber-band both directions and settle idle",()=>{
+    foreach(int count in new[]{1,2})foreach(double displacement in new[]{-240.5,240.5}){
+        var physics=new ScrollPhysics();physics.Resize(Math.Max(0,count*52-208));physics.Begin(0);physics.Drag(displacement,.1);
+        if(Math.Sign(physics.Position)!=Math.Sign(displacement)||Math.Abs(physics.Position)>=72)throw new Exception("Rubber resistance");
+        physics.Release(.3);for(int i=0;i<1200&&physics.Moving;i++)physics.Step(1.0/120);
+        Equal(0,physics.Position);if(physics.Moving)throw new Exception("Idle motion did not stop");
+    }
+});
+Check("pixel drag momentum and high-resolution wheel",()=>{
+    var physics=new ScrollPhysics();physics.Resize(2000);physics.Jump(300);physics.Begin(0);physics.Drag(12.375,.016);Equal(312.375,physics.Position);
+    physics.Release(.02);physics.Step(.016);if(physics.Position<=312.375)throw new Exception("No momentum");
+    var fine=new ScrollPhysics();fine.Resize(2000);fine.Jump(200);fine.Wheel(-1);fine.Step(.008);
+    if(fine.Position<=200||fine.Position>=201)throw new Exception("Wheel quantized");
+    for(int i=0;i<2000&&physics.Moving;i++)physics.Step(.008);if(physics.Moving)throw new Exception("Momentum never stopped");
+});
+Check("long list bottom return and mid-flight grab continuity",()=>{
+    var physics=new ScrollPhysics();physics.Resize(520);physics.Jump(500);physics.Begin(0);physics.Drag(160,.04);physics.Release(.05);
+    for(int i=0;i<1600&&physics.Moving;i++)physics.Step(.008);Equal(520,physics.Position);
+    physics.Begin(1);physics.Drag(160,1.1);double before=physics.Position;physics.Begin(1.2);physics.Drag(0,1.21);if(Math.Abs(before-physics.Position)>.00001)throw new Exception("Grab jumped");
+    physics.Release(1.4);physics.Resize(0);for(int i=0;i<1600&&physics.Moving;i++)physics.Step(.008);Equal(0,physics.Position);
+});
+Console.WriteLine($"{passed}/29 passed");

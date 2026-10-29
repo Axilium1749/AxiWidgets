@@ -20,6 +20,7 @@
 #include <map>
 #include <set>
 #include <chrono>
+#include <algorithm>
 #include <unordered_map>
 
 using namespace winrt;
@@ -104,6 +105,7 @@ struct Card
     CompositionLineGeometry vertical{nullptr},horizontal{nullptr};CompositionSpriteShape verticalShape{nullptr},horizontalShape{nullptr};
     struct Row {SpriteVisual visual{nullptr};CompositionDrawingSurface surface{nullptr};float y{},dpi{};};
     std::map<std::wstring,Row> rows;
+    SpriteVisual scrollbar{nullptr};float scrollMaximum=0;
     ContainerVisual viewport{nullptr},scroller{nullptr};float scrollTarget=0;bool listReady=false;
     std::wstring time,date;
     void Animate(Visual const& visual,wchar_t const* property,float value,int duration){
@@ -125,8 +127,13 @@ struct Card
                 }
                 float next=-cmd.y;
                 if(!listReady)scroller.Offset({0,next,0});
-                else if(next!=scrollTarget)Animate(scroller,L"Offset.Y",next,210);
+                else if(next!=scrollTarget){scroller.StopAnimation(L"Offset.Y");scroller.Offset({0,next,0});}
                 scrollTarget=next;continue;
+            }
+            if(cmd.kind==7){
+                if(!scrollbar){scrollbar=renderer->compositor.CreateSpriteVisual();scrollbar.Brush(renderer->compositor.CreateColorBrush({96,255,255,255}));root.Children().InsertAtTop(scrollbar);}
+                scrollbar.Size({cmd.w,cmd.h});scrollMaximum=cmd.r;scrollbar.Opacity(cmd.r>0?1.f:0.f);
+                scrollbar.Offset({cmd.x,98+(196-cmd.h)*(cmd.r>0?std::clamp(-scrollTarget/cmd.r,0.f,1.f):0.f),0});continue;
             }
             if(cmd.kind!=4){background.push_back(cmd);continue;}
             std::wstring id(cmd.text);active.insert(id);bool fresh=rows.find(id)==rows.end();auto& row=rows[id];
@@ -230,4 +237,8 @@ extern "C" __declspec(dllexport) HRESULT __cdecl AxiCard_CreateWidget(HWND* resu
 }
 extern "C" __declspec(dllexport) HRESULT __cdecl AxiCard_SetContent(HWND hwnd,DrawCommand const* commands,int count) noexcept {
     return Guard([&]{if(count<0||count>1000||(!commands&&count))throw hresult_invalid_argument();auto& card=GetCard(hwnd);card.SetCommands(std::vector<DrawCommand>(commands,commands+count));});
+}
+
+extern "C" __declspec(dllexport) HRESULT __cdecl AxiCard_SetScroll(HWND hwnd,float position) noexcept {
+    return Guard([&]{auto& card=GetCard(hwnd);if(card.scroller){card.scroller.StopAnimation(L"Offset.Y");card.scroller.Offset({0,-position,0});card.scrollTarget=-position;if(card.scrollbar&&card.scrollMaximum>0)card.scrollbar.Offset({341,98+(196-card.scrollbar.Size().y)*std::clamp(position/card.scrollMaximum,0.f,1.f),0});}});
 }

@@ -13,14 +13,16 @@ internal sealed partial class ClockWindow
     {
         var ids=manager.Reminders.Items.Select(x=>x.Id).ToHashSet();
         insertedTasks=ids.Except(knownTasks).ToHashSet();
-        if(tasksInitialized&&insertedTasks.Count>0)scroll=0;
+        ResizeScroll();
+        if(tasksInitialized&&insertedTasks.Count>0){StopScrollMotion();scrollPhysics.Jump(0);scroll=0;}
+        else if(scroll>scrollPhysics.Maximum)StartScrollMotion();
         RefreshClock();
     }
     private WidgetDrawing DrawReminders()
     {
         var items=manager.Reminders.Items;
         var drawing=WidgetDrawing.Reminders(items,scroll,input?.Text,input?.SelectionStart??0,renderedRows,insertedTasks);
-        renderedRows=items.Skip(Math.Max(0,scroll-6)).Take(scroll<6?scroll+11:17).Select(x=>x.Id).ToHashSet();
+        renderedRows=items.Skip(Math.Max(0,(int)(scroll/52)-6)).Take(scroll<312?(int)(scroll/52)+11:17).Select(x=>x.Id).ToHashSet();
         knownTasks=items.Select(x=>x.Id).ToHashSet();insertedTasks.Clear();tasksInitialized=true;
         return drawing;
     }
