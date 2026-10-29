@@ -54,7 +54,11 @@ internal sealed class WidgetDrawing
         if(animated)d.C(7,341,98,2,items.Count>4?Math.Max(12,196f*4/items.Count):196,0x60FFFFFF,Math.Max(0,items.Count*52-208));
         else if(items.Count>4){float h=196f*4/items.Count,y=98+(196-h)*(float)Math.Clamp(first,0,items.Count-4)/(items.Count-4);d.C(0,341,y,2,h,0x60FFFFFF,1);}
         if(draft!=null){caret=Math.Clamp(caret,0,draft.Length);int start=Math.Max(0,caret-28);draft=draft[start..].Insert(caret-start,"│");}
-        d.Panel(18,322,328,45);d.Text("+",34,322,26,45,28,Yellow);d.Text(draft==null?"Add a reminder":draft,76,322,258,45,15,draft==null?Muted:White);
+        d.Panel(18,322,328,45);
+        // Geometric plus stays centered independently of font baseline metrics.
+        d.Line(40,344.5f,14,0,Yellow,1.8f);d.Line(47,337.5f,0,14,Yellow,1.8f);
+        // Optical alignment compensates for Segoe UI's extra space above the ink.
+        d.Text(draft==null?"Add a reminder":draft,76,321.5f,258,45,draft==null?16:18,draft==null?Muted:White);
         return d;
     }
 }
