@@ -6,32 +6,52 @@ using AxiWidgets.Core;
 namespace AxiWidgets;
 internal sealed partial class ClockWindow
 {
-    private readonly ScrollPhysics scrollPhysics=new();
-    private readonly DispatcherTimer scrollTimer=new(DispatcherPriority.Render){Interval=TimeSpan.FromMilliseconds(8)};
+    private ScrollPhysics scrollPhysics=new();
+    private readonly DispatcherTimer scrollTimer=new(DispatcherPriority.Render){Interval=TimeSpan.FromMilliseconds(16)};
     private readonly Stopwatch scrollClock=Stopwatch.StartNew();
-    private double lastScrollFrame,pointerY,pointerX;
+    private double motionStarted,pointerY,pointerX;
+    private const double MotionInterval=1.0/240;
+    private System.Collections.Generic.List<ScrollPhysics>? motionFrames;
     private bool listPressed,listDragging,scrollTimerHooked;
     private int renderedBand=int.MinValue;
     private void ResizeScroll()=>scrollPhysics.Resize(Math.Max(0,manager.Reminders.Items.Count*52-208));
     private void StartScrollMotion()
     {
-        if(closed||State.Kind!="Reminders")return;
+        if(closed||State.Kind!="Reminders"||!scrollPhysics.Moving)return;
         if(!scrollTimerHooked){scrollTimer.Tick+=ScrollFrame;scrollTimerHooked=true;}
-        if(!scrollTimer.IsEnabled){lastScrollFrame=scrollClock.Elapsed.TotalSeconds;scrollTimer.Start();}
+        var model=scrollPhysics.Copy();motionFrames=new(){model.Copy()};
+        var positions=new System.Collections.Generic.List<float>{(float)model.Position};
+        for(int i=0;i<1200&&model.Moving;i++){model.Step(MotionInterval);motionFrames.Add(model.Copy());positions.Add((float)model.Position);}
+        if(positions.Count<2)return;
+        NativeCard.Check(NativeCard.AnimateScroll(Handle,positions.ToArray(),positions.Count,(float)MotionInterval));
+        motionStarted=scrollClock.Elapsed.TotalSeconds;scrollTimer.Start();
     }
-    private void StopScrollMotion(){scrollTimer.Stop();scrollPhysics.Cancel();}
+    private void SyncScrollMotion()
+    {
+        if(motionFrames==null)return;
+        double elapsed=Math.Max(0,scrollClock.Elapsed.TotalSeconds-motionStarted);
+        int index=Math.Min(motionFrames.Count-1,(int)(elapsed/MotionInterval));
+        scrollPhysics=motionFrames[index].Copy();
+        if(index<motionFrames.Count-1)scrollPhysics.Step(elapsed-index*MotionInterval);
+        PresentScroll(false);
+        if(index==motionFrames.Count-1){scrollTimer.Stop();motionFrames=null;}
+    }
+    private void StopScrollMotion()
+    {
+        SyncScrollMotion();scrollTimer.Stop();motionFrames=null;scrollPhysics.Cancel();
+        if(!closed&&State.Kind=="Reminders")NativeCard.Check(NativeCard.SetScroll(Handle,(float)scrollPhysics.Position));
+    }
     private void ScrollFrame(object? sender,EventArgs args)
     {
-        double now=scrollClock.Elapsed.TotalSeconds;scrollPhysics.Step(now-lastScrollFrame);lastScrollFrame=now;PresentScroll();
-        if(!scrollPhysics.Moving)scrollTimer.Stop();
+        // Only maintain virtualized rows. DWM plays every motion frame itself.
+        if(motionFrames!=null)SyncScrollMotion();else scrollTimer.Stop();
     }
-    private void PresentScroll()
+    private void PresentScroll(bool applyOffset=true)
     {
         scroll=scrollPhysics.Position;
         int band=(int)Math.Floor(scroll/52);
-        // Refill virtualized rows only on crossing a row boundary, not per frame.
         if(band!=renderedBand){renderedBand=band;RefreshClock();}
-        NativeCard.Check(NativeCard.SetScroll(Handle,(float)scroll));
+        if(applyOffset)NativeCard.Check(NativeCard.SetScroll(Handle,(float)scroll));
     }
     private void BeginListPointer()
     {
@@ -77,11 +97,11 @@ internal sealed partial class ClockWindow
                 if(!listDragging||Native.GetCapture()!=Handle)throw new InvalidOperationException("List drag capture failed");
                 if(count<=2&&scroll>=0)throw new InvalidOperationException("Short list did not stretch");
                 if(Native.Bounds(Handle)!=original)throw new InvalidOperationException("Normal scroll moved widget");
-                EndListPointer(true);scrollTimer.Stop();
+                EndListPointer(true);scrollTimer.Stop();motionFrames=null;
                 for(int step=0;step<1600&&scrollPhysics.Moving;step++){scrollPhysics.Step(1.0/120);PresentScroll();}
                 ScrollFrame(null,EventArgs.Empty);
                 if(scrollTimer.IsEnabled||scroll<0||scroll>scrollPhysics.Maximum)throw new InvalidOperationException("Spring/idle cleanup failed");
-                if(count>4){double before=scroll;Scroll(-1);scrollTimer.Stop();scrollPhysics.Step(.008);PresentScroll();if(scroll==before)throw new InvalidOperationException("Fine wheel delta ignored");}
+                if(count>4){double before=scroll;Scroll(-1);scrollTimer.Stop();motionFrames=null;scrollPhysics.Step(.008);PresentScroll();if(scroll==before)throw new InvalidOperationException("Fine wheel delta ignored");}
             }
         }finally{EndListPointer(false);StopScrollMotion();foreach(var id in added)manager.Reminders.Remove(id);SettleScroll();Native.SetCursorPos(saved.X,saved.Y);}
     }

@@ -13,9 +13,9 @@ internal sealed partial class ClockWindow
     {
         var ids=manager.Reminders.Items.Select(x=>x.Id).ToHashSet();
         insertedTasks=ids.Except(knownTasks).ToHashSet();
-        ResizeScroll();
-        if(tasksInitialized&&insertedTasks.Count>0){StopScrollMotion();scrollPhysics.Jump(0);scroll=0;}
-        else if(scroll>scrollPhysics.Maximum)StartScrollMotion();
+        SyncScrollMotion();ResizeScroll();
+        if(tasksInitialized&&insertedTasks.Count>0){StopScrollMotion();scrollPhysics.Jump(0);scroll=0;NativeCard.Check(NativeCard.SetScroll(Handle,0));}
+        else if(scroll>scrollPhysics.Maximum||motionFrames!=null)StartScrollMotion();
         RefreshClock();
     }
     private WidgetDrawing DrawReminders()

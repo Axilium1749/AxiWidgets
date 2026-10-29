@@ -26,7 +26,15 @@ public sealed class ScrollPhysics(ScrollParameters? parameters=null)
     }
     public void Release(double time){Dragging=false;if(time-lastTime>.1)Velocity=0;Velocity=Math.Clamp(Velocity,-Parameters.MaxVelocity,Parameters.MaxVelocity);}
     public void Cancel(){Dragging=false;Velocity=0;springTarget=null;}
-    public void Wheel(double delta){Dragging=false;springTarget=null;Velocity=Math.Clamp(Velocity-delta*Parameters.WheelImpulse,-Parameters.MaxVelocity,Parameters.MaxVelocity);}
+    public ScrollPhysics Copy()=>(ScrollPhysics)MemberwiseClone();
+    public bool Wheel(double delta)
+    {
+        // Wheel motion cannot pull away from a boundary or stretch a short list.
+        // Momentum arriving at a boundary from inside may still settle elastically.
+        if(Maximum<=0||delta==0||Dragging||(Position<=0&&delta>0)||(Position>=Maximum&&delta<0)
+            ||(springTarget==0&&delta>0)||(springTarget==Maximum&&delta<0))return false;
+        springTarget=null;Velocity=Math.Clamp(Velocity-delta*Parameters.WheelImpulse,-Parameters.MaxVelocity,Parameters.MaxVelocity);return true;
+    }
     public void Step(double elapsed)
     {
         if(Dragging)return;

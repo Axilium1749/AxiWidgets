@@ -126,14 +126,16 @@ struct Card
                     scroller=c.CreateContainerVisual();scroller.Size({width,height});viewport.Children().InsertAtTop(scroller);root.Children().InsertAtTop(viewport);
                 }
                 float next=-cmd.y;
-                if(!listReady)scroller.Offset({0,next,0});
-                else if(next!=scrollTarget){scroller.StopAnimation(L"Offset.Y");scroller.Offset({0,next,0});}
-                scrollTarget=next;continue;
+                if(!listReady){scroller.Offset({0,next,0});scrollTarget=next;}
+                // Once initialized, scrolling is owned by SetScroll / AnimateScroll.
+                // Content refills must not interrupt the running compositor animation.
+                continue;
             }
             if(cmd.kind==7){
-                if(!scrollbar){scrollbar=renderer->compositor.CreateSpriteVisual();scrollbar.Brush(renderer->compositor.CreateColorBrush({96,255,255,255}));root.Children().InsertAtTop(scrollbar);}
+                bool changed=scrollMaximum!=cmd.r;
+                if(!scrollbar){changed=true;scrollbar=renderer->compositor.CreateSpriteVisual();scrollbar.Brush(renderer->compositor.CreateColorBrush({96,255,255,255}));root.Children().InsertAtTop(scrollbar);}
                 scrollbar.Size({cmd.w,cmd.h});scrollMaximum=cmd.r;scrollbar.Opacity(cmd.r>0?1.f:0.f);
-                scrollbar.Offset({cmd.x,98+(196-cmd.h)*(cmd.r>0?std::clamp(-scrollTarget/cmd.r,0.f,1.f):0.f),0});continue;
+                if(changed)scrollbar.Offset({cmd.x,98+(196-cmd.h)*(cmd.r>0?std::clamp(-scrollTarget/cmd.r,0.f,1.f):0.f),0});continue;
             }
             if(cmd.kind!=4){background.push_back(cmd);continue;}
             std::wstring id(cmd.text);active.insert(id);bool fresh=rows.find(id)==rows.end();auto& row=rows[id];
@@ -240,5 +242,21 @@ extern "C" __declspec(dllexport) HRESULT __cdecl AxiCard_SetContent(HWND hwnd,Dr
 }
 
 extern "C" __declspec(dllexport) HRESULT __cdecl AxiCard_SetScroll(HWND hwnd,float position) noexcept {
-    return Guard([&]{auto& card=GetCard(hwnd);if(card.scroller){card.scroller.StopAnimation(L"Offset.Y");card.scroller.Offset({0,-position,0});card.scrollTarget=-position;if(card.scrollbar&&card.scrollMaximum>0)card.scrollbar.Offset({341,98+(196-card.scrollbar.Size().y)*std::clamp(position/card.scrollMaximum,0.f,1.f),0});}});
+    return Guard([&]{auto& card=GetCard(hwnd);if(card.scroller){card.scroller.StopAnimation(L"Offset.Y");if(card.scrollbar)card.scrollbar.StopAnimation(L"Offset.Y");card.scroller.Offset({0,-position,0});card.scrollTarget=-position;if(card.scrollbar&&card.scrollMaximum>0)card.scrollbar.Offset({341,98+(196-card.scrollbar.Size().y)*std::clamp(position/card.scrollMaximum,0.f,1.f),0});}});
+}
+
+extern "C" __declspec(dllexport) HRESULT __cdecl AxiCard_AnimateScroll(HWND hwnd,float const* positions,int count,float interval) noexcept {
+    return Guard([&]{
+        if(!positions||count<2||count>2400||interval<=0)throw hresult_invalid_argument();
+        auto& card=GetCard(hwnd);if(!card.scroller)return;
+        auto c=renderer->compositor;auto movement=c.CreateScalarKeyFrameAnimation();auto thumb=c.CreateScalarKeyFrameAnimation();
+        auto duration=std::chrono::duration_cast<winrt::Windows::Foundation::TimeSpan>(std::chrono::duration<double>((count-1)*interval));
+        movement.Duration(duration);thumb.Duration(duration);auto linear=c.CreateLinearEasingFunction();
+        for(int i=0;i<count;i++){
+            float progress=static_cast<float>(i)/(count-1);movement.InsertKeyFrame(progress,-positions[i],linear);
+            if(card.scrollbar&&card.scrollMaximum>0)thumb.InsertKeyFrame(progress,98+(196-card.scrollbar.Size().y)*std::clamp(positions[i]/card.scrollMaximum,0.f,1.f),linear);
+        }
+        card.scroller.StartAnimation(L"Offset.Y",movement);
+        if(card.scrollbar&&card.scrollMaximum>0)card.scrollbar.StartAnimation(L"Offset.Y",thumb);
+    });
 }
