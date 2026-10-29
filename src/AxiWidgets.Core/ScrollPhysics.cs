@@ -15,18 +15,33 @@ public sealed class ScrollPhysics(ScrollParameters? parameters=null)
     public bool Dragging {get;private set;}
     public bool Moving=>!Dragging&&(Math.Abs(Velocity)>.5||Math.Abs(Position-(springTarget??Math.Clamp(Position,0,Maximum)))>.05);
     private double? springTarget;
-    private double origin,lastTime;
+    private double lastDisplacement,lastTime;
     private double modelTime,wheelReturnStarted;
     private bool wheelMotion,wheelArmOnArrival,freeReturn;
     public void Resize(double maximum){Maximum=Math.Max(0,maximum);if(springTarget.HasValue)springTarget=Math.Clamp(springTarget.Value,0,Maximum);}
     public void Jump(double position){Position=Math.Clamp(position,0,Maximum);Velocity=0;Dragging=false;springTarget=null;wheelMotion=false;freeReturn=false;}
-    public void Begin(double time){Dragging=true;wheelMotion=false;freeReturn=false;springTarget=null;double bound=Math.Clamp(Position,0,Maximum),over=Position-bound;origin=bound+Math.Sign(over)*Math.Abs(over)*Parameters.RubberLength/Math.Max(.1,Parameters.RubberLength-Math.Abs(over))/Parameters.Resistance;Velocity=0;lastTime=time;}
+    public void Begin(double time){Dragging=true;wheelMotion=false;freeReturn=false;springTarget=null;lastDisplacement=0;Velocity=0;lastTime=time;}
     public void Drag(double displacement,double time)
     {
-        double raw=origin+displacement,bound=Math.Clamp(raw,0,Maximum),over=raw-bound;
-        double next=bound+Math.Sign(over)*Parameters.RubberLength*(Math.Abs(over)*Parameters.Resistance)/(Parameters.RubberLength+Math.Abs(over)*Parameters.Resistance);
-        double dt=time-lastTime;if(dt>0){double sample=(next-Position)/Math.Max(dt,.004);Velocity=Velocity*.3+sample*.7;}
+        double delta=displacement-lastDisplacement;lastDisplacement=displacement;
+        if(delta==0)return;
+        double bound=Math.Clamp(Position,0,Maximum),over=Position-bound,next;
+        if(over*delta<0){
+            // Return follows the pointer immediately, with no accumulated rubber
+            // displacement to unwind. Compress only if it crosses the other edge.
+            double raw=Position+delta;
+            next=over<0&&raw<0||over>0&&raw>Maximum?raw:Rubber(raw);
+        }else if(over!=0){
+            double distance=Math.Abs(over),length=Parameters.RubberLength;
+            next=distance>=length?Position:Rubber(bound+Math.Sign(over)*distance*length/(length-distance)/Parameters.Resistance+delta);
+        }else next=Rubber(Position+delta);
+        double dt=time-lastTime;if(dt>0){double sample=(next-Position)/Math.Max(dt,.004);if(sample*Velocity<0)Velocity=0;Velocity=Velocity*.3+sample*.7;}
         Position=next;lastTime=time;
+    }
+    private double Rubber(double raw)
+    {
+        double bound=Math.Clamp(raw,0,Maximum),over=raw-bound;
+        return bound+Math.Sign(over)*Parameters.RubberLength*(Math.Abs(over)*Parameters.Resistance)/(Parameters.RubberLength+Math.Abs(over)*Parameters.Resistance);
     }
     public void Release(double time){Dragging=false;if(time-lastTime>.1)Velocity=0;Velocity=Math.Clamp(Velocity,-Parameters.MaxVelocity,Parameters.MaxVelocity);}
     public void Cancel(){Dragging=false;Velocity=0;springTarget=null;}

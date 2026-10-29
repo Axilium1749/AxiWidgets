@@ -143,5 +143,16 @@ Check("wheel stretch is softer and stays within drag rubber extent",()=>{
         if(physics.Moving||physics.Position<0||physics.Position>physics.Maximum)throw new Exception("Bounded wheel did not settle");
     }
 });
-Console.WriteLine($"{passed}/33 passed");
+Check("drag reverses immediately without overscroll displacement debt",()=>{
+    foreach(double maximum in new[]{0.0,520.0})foreach(int side in new[]{-1,1}){
+        var physics=new ScrollPhysics();physics.Resize(maximum);physics.Jump(side<0?0:maximum);physics.Begin(0);
+        physics.Drag(side*500,.1);double stretched=physics.Position;
+        physics.Drag(side*498,.116);Equal(stretched-side*2,physics.Position);
+        if(physics.Velocity*side>=0)throw new Exception("Momentum retained old direction");
+        double distance=Math.Abs(physics.Position-Math.Clamp(physics.Position,0,maximum));
+        physics.Drag(side*(498-distance-10),.132);
+        if(maximum>0&&(side<0?physics.Position<=0:physics.Position>=maximum))throw new Exception("Return waited for old pointer origin");
+    }
+});
+Console.WriteLine($"{passed}/34 passed");
 
