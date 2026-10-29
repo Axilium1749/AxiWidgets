@@ -103,21 +103,27 @@ Check("long list bottom return and mid-flight grab continuity",()=>{
     physics.Begin(1);physics.Drag(160,1.1);double before=physics.Position;physics.Begin(1.2);physics.Drag(0,1.21);if(Math.Abs(before-physics.Position)>.00001)throw new Exception("Grab jumped");
     physics.Release(1.4);physics.Resize(0);for(int i=0;i<1600&&physics.Moving;i++)physics.Step(.008);Equal(0,physics.Position);
 });
-Check("wheel ignores short lists and outward impulses at resting edges",()=>{
-    foreach(int count in new[]{1,2,4,12}){
-        var physics=new ScrollPhysics();physics.Resize(Math.Max(0,count*52-208));
-        for(int i=0;i<20;i++){if(physics.Wheel(120))throw new Exception("Top edge accepted outward wheel");physics.Step(.016);}
-        Equal(0,physics.Position);if(physics.Moving)throw new Exception("Top edge started motion");
-        physics.Jump(physics.Maximum);
-        for(int i=0;i<20;i++){if(physics.Wheel(-120))throw new Exception("Bottom edge accepted outward wheel");physics.Step(.016);}
-        Equal(physics.Maximum,physics.Position);if(physics.Moving)throw new Exception("Bottom edge started motion");
+Check("wheel overscroll cooldown and partial return on short and long lists",()=>{
+    foreach(int count in new[]{1,2,4,12})foreach(int direction in new[]{-1,1}){
+        var physics=new ScrollPhysics();physics.Resize(Math.Max(0,count*52-208));physics.Jump(direction<0?0:physics.Maximum);
+        double delta=direction<0?120:-120;
+        if(!physics.Wheel(delta,0))throw new Exception("First wheel stretch blocked");
+        if(physics.Wheel(delta,.01))throw new Exception("Repeated impulse accepted");
+        for(int i=0;i<20;i++)physics.Step(.008);
+        if(physics.Wheel(delta,.16))throw new Exception("Cooldown ignored");
+        double outside=direction<0?-physics.Position:physics.Position-physics.Maximum;
+        if(outside<=0)throw new Exception("Wheel did not stretch");
+        for(int i=0;i<20;i++)physics.Step(.008);
+        if(!physics.Wheel(delta,.32))throw new Exception("Repeat blocked after partial return and cooldown");
+        if(physics.Wheel(delta,.33))throw new Exception("Repeat did not restart cooldown");
+        for(int i=0;i<2000&&physics.Moving;i++)physics.Step(.008);
+        if(physics.Moving||physics.Position<0||physics.Position>physics.Maximum)throw new Exception("Did not settle");
+        if(!physics.Wheel(delta,5))throw new Exception("Idle wall-clock cooldown stuck");
     }
 });
-Check("wheel arriving from within can settle at end without spring resets",()=>{
-    var physics=new ScrollPhysics();physics.Resize(200);physics.Jump(180);physics.Wheel(-120);bool overshot=false;
-    for(int i=0;i<1500&&physics.Moving;i++){
-        physics.Step(1.0/240);if(physics.Position>200){overshot=true;if(physics.Wheel(-120))throw new Exception("Repeated outward wheel reset spring");}
-    }
-    if(!overshot)throw new Exception("Missing arrival elasticity");Equal(200,physics.Position);if(physics.Moving)throw new Exception("Did not settle");
+Check("reverse wheel stays responsive during rubber return",()=>{
+    var physics=new ScrollPhysics();physics.Resize(200);physics.Wheel(120,0);physics.Step(.016);
+    if(!physics.Wheel(-120,.02))throw new Exception("Reverse input blocked");
 });
 Console.WriteLine($"{passed}/31 passed");
+
