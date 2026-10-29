@@ -63,7 +63,6 @@ internal static class Program
 }
 internal sealed class Manager : IDisposable
 {
-    internal nint GrabCursor {get;}=PointerArtwork.Create();
     private readonly List<ClockWindow> windows=[];
     private readonly Forms.NotifyIcon tray=new() { Icon=TrayArtwork.Create(),Text="AxiWidgets" };
     private readonly string mode;
@@ -321,6 +320,6 @@ internal sealed class Manager : IDisposable
         disposed=true;retry.Stop();appearanceSave.Stop();gallery?.ShutdownGallery();
         Microsoft.Win32.SystemEvents.DisplaySettingsChanged-=DisplaysChanged; Microsoft.Win32.SystemEvents.TimeChanged-=TimeChanged;
         Microsoft.Win32.SystemEvents.UserPreferenceChanged-=PreferencesChanged;Microsoft.Win32.SystemEvents.PowerModeChanged-=PowerChanged;
-        foreach(var w in windows.ToArray())w.Close(); tray.Visible=false;tray.ContextMenuStrip?.Dispose();var icon=tray.Icon;tray.Dispose();icon?.Dispose();listener?.Dispose();if(GrabCursor!=0)Native.DestroyCursor(GrabCursor);NativeCard.Check(NativeCard.Shutdown());
+        foreach(var w in windows.ToArray())w.Close(); tray.Visible=false;tray.ContextMenuStrip?.Dispose();var icon=tray.Icon;tray.Dispose();icon?.Dispose();listener?.Dispose();NativeCard.Check(NativeCard.Shutdown());
     }
 }

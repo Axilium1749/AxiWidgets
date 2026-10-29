@@ -45,8 +45,6 @@ internal static class Native
     }
     [DllImport("user32.dll")] internal static extern bool RegisterRawInputDevices([In]RawDevice[] devices,uint count,uint size);
     [DllImport("user32.dll")] internal static extern uint GetRawInputData(nint input,uint command,out RawMouse data,ref uint size,uint headerSize);
-    [DllImport("user32.dll")] internal static extern bool ClipCursor(ref Rectangle rect);
-    [DllImport("user32.dll",EntryPoint="ClipCursor")] internal static extern bool UnclipCursor(nint none);
     [DllImport("user32.dll")] internal static extern bool GetClipCursor(out Rectangle rect);
     [DllImport("user32.dll")] internal static extern int GetSystemMetrics(int index);
     [DllImport("user32.dll")] internal static extern bool IsWindow(nint hwnd);
@@ -57,10 +55,6 @@ internal static class Native
     [DllImport("user32.dll")] internal static extern bool ReleaseCapture();
     [DllImport("user32.dll",EntryPoint="LoadCursorW")] internal static extern nint LoadCursor(nint module,nint id);
     [DllImport("user32.dll")] internal static extern nint SetCursor(nint cursor);
-    [StructLayout(LayoutKind.Sequential)] internal struct IconInfo {public int Icon;public uint X,Y;public nint Mask,Color;}
-    [DllImport("user32.dll")] internal static extern bool GetIconInfo(nint icon,out IconInfo info);
-    [DllImport("user32.dll")] internal static extern nint CreateIconIndirect(ref IconInfo info);
-    [DllImport("user32.dll")] internal static extern bool DestroyCursor(nint cursor);
     [DllImport("user32.dll")] internal static extern bool EnableWindow(nint hwnd,bool enabled);
     [DllImport("user32.dll")] internal static extern bool IsWindowEnabled(nint hwnd);
     [DllImport("gdi32.dll")] internal static extern nint CreateRoundRectRgn(int left,int top,int right,int bottom,int width,int height);
