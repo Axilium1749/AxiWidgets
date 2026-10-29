@@ -2,7 +2,8 @@ namespace AxiWidgets.Core;
 
 public sealed record ScrollParameters(double Resistance=0.55,double RubberLength=72,double Friction=9,
     double SpringStiffness=210,double SpringDamping=27,double MaxVelocity=1800,double WheelImpulse=5,
-    double WheelOverscrollImpulse=0,double WheelCoastTime=.24,double WheelCoastDamping=12);
+    double WheelOverscrollImpulse=0,double WheelCoastTime=.24,double WheelCoastDamping=12,
+    double WheelOverscrollScale=.55);
 
 // Coordinates and velocity are DIP and DIP/second; no UI or platform dependencies.
 public sealed class ScrollPhysics(ScrollParameters? parameters=null)
@@ -46,7 +47,7 @@ public sealed class ScrollPhysics(ScrollParameters? parameters=null)
         }else if(outward)freeReturn=false;
         double boost=outward?direction*Parameters.WheelOverscrollImpulse*Math.Min(1,Math.Abs(delta)/120):0;
         double impulse=-delta*Parameters.WheelImpulse+boost;
-        if(outward){wheelReturnStarted=modelTime;impulse/=1+Math.Pow(stretch/Parameters.RubberLength,2);}
+        if(outward){wheelReturnStarted=modelTime;impulse*=Parameters.WheelOverscrollScale/(1+Math.Pow(stretch/Parameters.RubberLength,2));}
         wheelMotion=true;wheelArmOnArrival=!outward;springTarget=null;
         Velocity=Math.Clamp(Velocity+impulse,-Parameters.MaxVelocity,Parameters.MaxVelocity);return true;
     }
@@ -68,6 +69,15 @@ public sealed class ScrollPhysics(ScrollParameters? parameters=null)
                 Velocity+=(-stiffness*(Position-(springTarget??bound))-damping*Velocity)*dt;
             }
             else Velocity*=Math.Exp(-Parameters.Friction*dt);
+            if(wheelMotion){
+                // Approach the same rubber-band extent as drag without hitting a
+                // hard position clamp. Only outward velocity is constrained.
+                double rate=Math.Sqrt(Parameters.SpringStiffness);
+                if(Velocity>0&&Position+Velocity*dt>Maximum)
+                    Velocity=Math.Min(Velocity,Math.Max(0,Maximum+Parameters.RubberLength-Position)*rate);
+                else if(Velocity<0&&Position+Velocity*dt<0)
+                    Velocity=Math.Max(Velocity,-Math.Max(0,Position+Parameters.RubberLength)*rate);
+            }
             Position+=Velocity*dt;
         }
         if(!Moving){Position=springTarget??Math.Clamp(Position,0,Maximum);Velocity=0;springTarget=null;}

@@ -131,5 +131,17 @@ Check("reverse input escapes spring target and continues inside list",()=>{
         if(physics.Moving)throw new Exception("Reverse scroll did not stop");
     }
 });
-Console.WriteLine($"{passed}/32 passed");
+Check("wheel stretch is softer and stays within drag rubber extent",()=>{
+    foreach(int count in new[]{1,2,12})foreach(int side in new[]{-1,1}){
+        var physics=new ScrollPhysics();physics.Resize(Math.Max(0,count*52-208));physics.Jump(side<0?0:physics.Maximum);
+        physics.Wheel(side<0?120:-120,0);Equal(330,Math.Abs(physics.Velocity));
+        for(int i=0;i<500;i++){
+            physics.Wheel(side<0?1200:-1200,i*.016);physics.Step(.016);
+            if(physics.Position < -72.0001 || physics.Position>physics.Maximum+72.0001)throw new Exception("Wheel exceeded drag extent");
+        }
+        for(int i=0;i<2000&&physics.Moving;i++)physics.Step(.008);
+        if(physics.Moving||physics.Position<0||physics.Position>physics.Maximum)throw new Exception("Bounded wheel did not settle");
+    }
+});
+Console.WriteLine($"{passed}/33 passed");
 
