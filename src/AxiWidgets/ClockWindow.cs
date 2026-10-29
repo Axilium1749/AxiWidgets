@@ -151,15 +151,17 @@ internal sealed partial class ClockWindow
                 }
                 switch(message.Msg){
                 case 0x111:if(owner.input!=null&&message.LParam==owner.input.Handle){Native.SendMessageTimeout(message.LParam,0x2111,message.WParam,message.LParam,2,1000,out _);message.Result=0;return;}break;
-                case 0x6:if(((long)message.WParam&0xffff)==0)owner.EndInput();break;
+                case 0x6:if(((long)message.WParam&0xffff)==0){owner.EndListPointer(false);owner.EndInput();}break;
+                case 0xFF:owner.RawListPointer(message.LParam);break;
                 case 0x201:if(owner.Editing)owner.BeginDrag();else owner.BeginListPointer();break;
                 case 0x20A:owner.Scroll(unchecked((short)((long)message.WParam>>16)));message.Result=0;return;
                 case 0x84:if(!owner.Editing&&owner.State.Kind=="Reminders"&&!owner.InteractivePoint()){message.Result=-1;return;}break;
                 case 0x200:owner.MoveListPointer();owner.MoveDrag();break;
                 case 0x202:owner.EndListPointer(true);owner.EndDrag();break;
                 case 0x215:owner.EndListPointer(false);owner.EndDrag();break;
+                case 0x1F:owner.EndListPointer(false);break;
                 case 0x7B:owner.OpenMenu();message.Result=0;return;
-                case 0x20:Native.SetCursor(Native.LoadCursor(0,owner.Editing?32646:32512));message.Result=1;return;
+                case 0x20:owner.UpdatePointerCursor();message.Result=1;return;
                 case 0x21:message.Result=3;return;
                 case 0x7E:case 0x2E0:Application.Current.Dispatcher.BeginInvoke(()=>{if(!owner.closed&&!owner.dragging)owner.Restore();});break;
                 case 0x1A:case 0x320:Application.Current.Dispatcher.BeginInvoke(()=>{owner.ApplyTheme();owner.RefreshClock();});break;
@@ -167,7 +169,7 @@ internal sealed partial class ClockWindow
                 case 0x82:Application.Current.Dispatcher.BeginInvoke(()=>owner.Close());break;
                 }
                 base.WndProc(ref message);
-            }catch(Exception e){Log.Write("Native card message failed: "+e);}
+            }catch(Exception e){try{owner.EndListPointer(false);}catch{}Log.Write("Native card message failed: "+e);}
         }
     }
 }
