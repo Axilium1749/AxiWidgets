@@ -14,8 +14,6 @@ internal partial class GalleryWindow : Window
 {
     private readonly Manager manager;
     private readonly DispatcherTimer timer=new();
-    private readonly DispatcherTimer appearanceUpdate=new() {Interval=TimeSpan.FromMilliseconds(50)};
-    private bool appearanceReady;
     private bool allowClose;
     internal nint Handle { get; private set; }
     internal bool PreviewTimerRunning => timer.IsEnabled;
@@ -23,12 +21,6 @@ internal partial class GalleryWindow : Window
     {
         this.manager=manager;
         InitializeComponent();
-        BlurSlider.Value=manager.Appearance.Blur?1:0;
-        BlurValue.Text=manager.Appearance.Blur?"Native":"Off";
-        TransparencySlider.Value=manager.Appearance.Transparency;
-        TransparencyValue.Text=$"{manager.Appearance.Transparency:0}%";
-        appearanceReady=true;
-        appearanceUpdate.Tick+=(_,_)=>FlushAppearance();
         SourceInitialized+=(_,_)=> {
             Handle=new WindowInteropHelper(this).Handle;
             DesktopHost.ConfigureGallery(Handle);
@@ -39,7 +31,7 @@ internal partial class GalleryWindow : Window
         IsVisibleChanged+=(_,_)=> { if(IsVisible) RefreshPreview(); else timer.Stop(); };
         timer.Tick+=(_,_)=>RefreshPreview();
         Closing+=PreventClose;
-        Closed+=(_,_)=> {timer.Stop();appearanceUpdate.Stop();HwndSource.FromHwnd(Handle)?.RemoveHook(Hook);};
+        Closed+=(_,_)=> {timer.Stop();HwndSource.FromHwnd(Handle)?.RemoveHook(Hook);};
     }
     internal void Open()
     {
@@ -82,18 +74,6 @@ internal partial class GalleryWindow : Window
         RefreshPreview();
     }
     private void SelectClock(object sender,RoutedEventArgs e) { Search.Clear(); }
-    private void BlurChanged(object sender,RoutedPropertyChangedEventArgs<double> e) { if(appearanceReady) {BlurValue.Text=e.NewValue>=1?"Native":"Off";FlushAppearance();} }
-    private void TransparencyChanged(object sender,RoutedPropertyChangedEventArgs<double> e)
-    {
-        if(!appearanceReady) return;
-        TransparencyValue.Text=$"{e.NewValue:0}%";
-        if(!appearanceUpdate.IsEnabled) appearanceUpdate.Start();
-    }
-    internal void FlushAppearance()
-    {
-        appearanceUpdate.Stop();
-        if(appearanceReady) manager.ChangeAppearance(BlurSlider.Value>=1,TransparencySlider.Value);
-    }
     private void AddDigital(object sender,RoutedEventArgs e) { manager.AddFromGallery(false); AddedStatus.Text="Digital Clock added to your desktop"; }
     private void AddSeconds(object sender,RoutedEventArgs e) { manager.AddFromGallery(true); AddedStatus.Text="Clock with seconds added to your desktop"; }
     private void DoneClicked(object sender,RoutedEventArgs e) { manager.FinishEditing(); }
@@ -108,4 +88,3 @@ internal partial class GalleryWindow : Window
         return 0;
     }
 }
-

@@ -21,7 +21,8 @@ internal sealed class ClockWindow : Window
     private readonly Manager manager;
     private readonly TextBlock time=new() { FontSize=54,FontWeight=FontWeights.Light,HorizontalAlignment=HorizontalAlignment.Center };
     private readonly TextBlock date=new() { FontSize=14,HorizontalAlignment=HorizontalAlignment.Center,Margin=new Thickness(0,5,0,0) };
-    private readonly Border card=new() { CornerRadius=new CornerRadius(0),BorderThickness=new Thickness(0) };
+    private readonly Border card=new();
+    private readonly Border outline=new() { CornerRadius=new CornerRadius(DesktopHost.ClockCornerRadius),BorderThickness=new Thickness(.6),IsHitTestVisible=false };
     private readonly Canvas guides=new() { IsHitTestVisible=false };
     private readonly DispatcherTimer timer=new();
     private readonly SnapEngine snap=new();
@@ -35,8 +36,10 @@ internal sealed class ClockWindow : Window
         Title="AxiWidgets — Digital Clock"; Width=300; Height=160; WindowStyle=WindowStyle.None;
         ResizeMode=ResizeMode.NoResize; ShowInTaskbar=mode=="normal"; ShowActivated=mode=="normal";
         Background=Brushes.Transparent; FontFamily=new FontFamily("Segoe UI Variable, Segoe UI");
+        UseLayoutRounding=false;
         var stack=new StackPanel { VerticalAlignment=VerticalAlignment.Center }; stack.Children.Add(time); stack.Children.Add(date);
-        var grid=new Grid(); grid.Children.Add(stack); grid.Children.Add(guides); card.Child=grid; Content=card;
+        var grid=new Grid(); grid.Children.Add(stack); grid.Children.Add(guides); card.Child=grid;
+        var surface=new Grid();surface.Children.Add(card);surface.Children.Add(outline);Content=surface;
         SourceInitialized+=(_,_) => {
             Handle=new WindowInteropHelper(this).Handle;
             HwndSource.FromHwnd(Handle)?.AddHook(Hook);
@@ -44,6 +47,7 @@ internal sealed class ClockWindow : Window
             ApplyTheme(); Restore();
         };
         Loaded+=(_,_) => { if(mode=="desktop" && !new DesktopHost().Attach(Handle)) Hide(); ApplyTheme(); RefreshClock(); };
+        SizeChanged+=(_,_)=> {if(Handle!=0)DesktopHost.RoundClock(Handle);};
         timer.Tick+=(_,_) => RefreshClock();
         MouseLeftButtonDown+=BeginDrag; MouseMove+=MoveDrag;
         MouseLeftButtonUp+=(_,_) => EndDrag();
@@ -61,14 +65,16 @@ internal sealed class ClockWindow : Window
         Dark=(int?)Microsoft.Win32.Registry.GetValue(@"HKEY_CURRENT_USER\Software\Microsoft\Windows\CurrentVersion\Themes\Personalize","AppsUseLightTheme",1)==0;
         Foreground=Dark?Brushes.White:Brushes.Black;
         date.Opacity=.65;
-        bool available=DesktopHost.Backdrop(Handle,Dark,manager.Appearance.Transparency>0,Editing,manager.Appearance);
+        bool available=DesktopHost.Backdrop(Handle,Dark,true,Editing,manager.Appearance);
         AcrylicAccepted=available;
+        DesktopHost.RoundClock(Handle);
         // Explicit solid fallback only on API failure; no simulated blur.
         byte tint=available?manager.Appearance.TintAlpha:(byte)255;
-        card.Background=new SolidColorBrush(Dark?Color.FromArgb(tint,32,32,32):Color.FromArgb(tint,245,245,245));
+        uint rgb=manager.Appearance.TintRgb;
+        card.Background=new SolidColorBrush(Color.FromArgb(tint,(byte)(rgb>>16),(byte)(rgb>>8),(byte)rgb));
         Background=available?Brushes.Transparent:card.Background;
         InvalidateVisual();
-        card.BorderBrush=Editing?Brushes.DeepSkyBlue:new SolidColorBrush(Dark?Color.FromArgb(70,255,255,255):Color.FromArgb(50,0,0,0));
+        outline.BorderBrush=new SolidColorBrush(Editing?Color.FromArgb(100,130,190,255):Color.FromArgb(44,255,255,255));
     }
     internal void SetEdit(bool enabled)
     {

@@ -11,6 +11,7 @@ using System.Windows.Threading;
 using AxiWidgets.Core;
 using Rect = AxiWidgets.Core.Rect;
 using Forms=System.Windows.Forms;
+using Drawing=System.Drawing;
 
 namespace AxiWidgets;
 
@@ -22,6 +23,25 @@ internal static class Log
         try { Directory.CreateDirectory(Folder); File.AppendAllText(Path.Combine(Folder,"diagnostics.log"),$"{DateTimeOffset.Now:O} {text}\n"); }
         catch(IOException) { }
         catch(UnauthorizedAccessException) { }
+    }
+}
+internal static class TrayArtwork
+{
+    internal static Drawing.Icon Create()
+    {
+        using var bitmap=new Drawing.Bitmap(32,32);
+        using(var g=Drawing.Graphics.FromImage(bitmap)) {
+            g.SmoothingMode=Drawing.Drawing2D.SmoothingMode.AntiAlias;
+            using var face=new Drawing.SolidBrush(Drawing.Color.FromArgb(19,93,195));
+            using var rim=new Drawing.Pen(Drawing.Color.FromArgb(215,232,255),1.4f);
+            using var hand=new Drawing.Pen(Drawing.Color.White,2.5f) {StartCap=Drawing.Drawing2D.LineCap.Round,EndCap=Drawing.Drawing2D.LineCap.Round};
+            g.FillEllipse(face,2,2,28,28); g.DrawEllipse(rim,2.7f,2.7f,26.6f,26.6f);
+            g.DrawLine(hand,16,16,16,8); g.DrawLine(hand,16,16,21,19);
+            g.FillEllipse(Drawing.Brushes.White,14.3f,14.3f,3.4f,3.4f);
+        }
+        nint handle=bitmap.GetHicon();
+        try {using var temporary=Drawing.Icon.FromHandle(handle);return (Drawing.Icon)temporary.Clone();}
+        finally {Native.DestroyIcon(handle);}
     }
 }
 internal static class Program
@@ -37,14 +57,14 @@ internal static class Program
         app.DispatcherUnhandledException+=(_,e)=>Log.Write(e.Exception.ToString());
         Log.Write($"Starting OS={Environment.OSVersion} runtime={Environment.Version} mode={mode}");
         using var manager=new Manager(mode);
-        app.Startup+=(_,_)=> { manager.Start(); if(args.Contains("--smoke")) app.Dispatcher.BeginInvoke(()=>manager.Smoke()); else if(args.Contains("--gallery")) app.Dispatcher.BeginInvoke(()=>manager.OpenGallery()); };
+        app.Startup+=(_,_)=> { manager.Start(); if(args.Contains("--smoke")) app.Dispatcher.BeginInvoke(()=>manager.Smoke()); else if(args.Contains("--accent-probe")) app.Dispatcher.BeginInvoke(()=>manager.AccentProbe()); else if(args.Contains("--live-probe")) app.Dispatcher.BeginInvoke(async ()=>await manager.LiveProbe()); else if(args.Contains("--gallery")) app.Dispatcher.BeginInvoke(()=>manager.OpenGallery()); };
         app.Run();
     }
 }
 internal sealed class Manager : IDisposable
 {
     private readonly List<ClockWindow> windows=[];
-    private readonly Forms.NotifyIcon tray=new() { Icon=System.Drawing.SystemIcons.Application,Text="AxiWidgets" };
+    private readonly Forms.NotifyIcon tray=new() { Icon=TrayArtwork.Create(),Text="AxiWidgets" };
     private readonly string mode;
     private bool editing, recovering, disposed;
     private HwndSource? listener;
@@ -60,9 +80,7 @@ internal sealed class Manager : IDisposable
     internal void Start()
     {
         var watch=Stopwatch.StartNew();
-        try { if(File.Exists(AppearancePath)) Appearance=JsonSerializer.Deserialize<AppearanceSettings>(File.ReadAllText(AppearancePath))??new(); }
-        catch(Exception e) when(e is IOException or JsonException or UnauthorizedAccessException) {Log.Write($"Appearance load failed: {e.Message}");}
-        Appearance.Normalize();
+        Appearance=new AppearanceSettings();
         listener=new HwndSource(new HwndSourceParameters("AxiWidgets Shell Listener") { Width=0,Height=0,WindowStyle=unchecked((int)0x80000000),ExtendedWindowStyle=0x80 });
         listener.AddHook(Messages);
         List<ClockState>? states=null;
@@ -94,9 +112,9 @@ internal sealed class Manager : IDisposable
             File.Move(Settings+".tmp",Settings,true);
         } catch(Exception e) when(e is IOException or UnauthorizedAccessException) { Log.Write($"Save failed: {e.Message}"); tray.ShowBalloonTip(4000,"AxiWidgets","Cannot save widget positions. See diagnostics.log.",Forms.ToolTipIcon.Warning); }
     }
-    internal void ChangeAppearance(bool blur,double transparency)
+    internal void ChangeAppearance(double tintOpacity,string tintColor)
     {
-        Appearance.Blur=blur; Appearance.Transparency=transparency; Appearance.Normalize();
+        Appearance.TintOpacity=tintOpacity; Appearance.TintColor=tintColor; Appearance.Normalize();
         foreach(var window in windows) window.ApplyTheme();
         appearanceSave.Stop(); appearanceSave.Start();
     }
@@ -119,25 +137,25 @@ internal sealed class Manager : IDisposable
             var first=windows[0];
             if(!Native.IsWindow(first.Handle)||Native.GetParent(first.Handle)==0) throw new Exception("No desktop parent");
             if(Native.IsWindowEnabled(first.Handle)) throw new Exception("Normal mode accepts input");
-            bool originalBlur=Appearance.Blur; double originalTransparency=Appearance.Transparency;
-            ChangeAppearance(true,56);
+            double originalOpacity=Appearance.TintOpacity; string originalColor=Appearance.TintColor;
+            ChangeAppearance(15,"#1E1E22");
             Log.Write($"SMOKE Acrylic request accepted={first.AcrylicAccepted}");
             if(first.AcrylicAccepted) {
-                byte RenderTintAlpha(double transparency) {
-                    ChangeAppearance(true,transparency); first.UpdateLayout();
+                byte RenderTintAlpha(double opacity) {
+                    ChangeAppearance(opacity,"#1E1E22"); first.UpdateLayout();
                     var rendered=new System.Windows.Media.Imaging.RenderTargetBitmap((int)first.ActualWidth,(int)first.ActualHeight,96,96,System.Windows.Media.PixelFormats.Pbgra32);
                     rendered.Render(first);
                     var pixel=new byte[4];
                     rendered.CopyPixels(new Int32Rect(20,20,1,1),pixel,4,0);
                     return pixel[3];
                 }
-                byte dense=RenderTintAlpha(20),light=RenderTintAlpha(80);
+                byte light=RenderTintAlpha(20),dense=RenderTintAlpha(80);
                 if(dense-light<100) throw new Exception($"Transparency did not change rendered tint: {dense}/{light}");
-                Log.Write($"TRANSPARENCY RENDER PASS: blur on, alpha at 20%={dense}, at 80%={light}");
+                Log.Write($"TRANSPARENCY RENDER PASS: blur on, alpha at 20%={light}, at 80%={dense}");
             }
-            ChangeAppearance(false,0);
-            if(first.AcrylicAccepted) throw new Exception("Acrylic did not turn off");
-            ChangeAppearance(originalBlur,originalTransparency);
+            ChangeAppearance(0,"#1E1E22");
+            if(!Appearance.Blur || Appearance.TintAlpha!=0) throw new Exception("Native blur or zero tint did not apply");
+            ChangeAppearance(originalOpacity,originalColor);
             editing=true; first.SetEdit(true);
             if(!Native.IsWindowEnabled(first.Handle)) throw new Exception("Edit mode disabled");
             Add(new ClockState { X=380,Y=48 });
@@ -161,10 +179,6 @@ internal sealed class Manager : IDisposable
             if(windows.Any(w=>Native.IsWindowEnabled(w.Handle))) throw new Exception("Input remains enabled");
             OpenGallery();
             var editor=gallery!;
-            editor.TransparencySlider.Value=0; editor.FlushAppearance();
-            if(windows.Any(w=>w.AcrylicAccepted)) throw new Exception("Global solid mode did not reach all widgets");
-            editor.BlurSlider.Value=0; editor.TransparencySlider.Value=75; editor.FlushAppearance();
-            if(Appearance.Blur||Appearance.Transparency!=75) throw new Exception("Global appearance controls failed");
             long ex=(long)Native.GetLong(editor.Handle,-20);
             if((ex&0x80)==0||(ex&8)==0||(ex&0x40000)!=0||editor.ShowInTaskbar) throw new Exception("Gallery window styles invalid");
             Native.SendMessageTimeout(editor.Handle,0x10,0,0,2,1000,out _);
@@ -191,8 +205,6 @@ internal sealed class Manager : IDisposable
             using(var output=File.Create(Path.Combine(Log.Folder,"gallery-layout.png"))) encoder.Save(output);
             editor.DoneButton.RaiseEvent(new RoutedEventArgs(System.Windows.Controls.Button.ClickEvent));
             if(editor.IsVisible||editor.PreviewTimerRunning||editing||windows.Any(w=>Native.IsWindowEnabled(w.Handle))) throw new Exception("Done failed to lock widgets or stop preview timer");
-            var restoredAppearance=JsonSerializer.Deserialize<AppearanceSettings>(File.ReadAllText(AppearancePath))!;
-            if(restoredAppearance.Blur||restoredAppearance.Transparency!=75) throw new Exception("Global appearance persistence failed");
             OpenGallery();
             if(gallery!=editor) throw new Exception("Gallery duplicated on reopen");
             FinishEditing();
@@ -201,6 +213,38 @@ internal sealed class Manager : IDisposable
         } catch(Exception e) {Log.Write("SMOKE FAIL: "+e);Environment.ExitCode=1;}
         gallery?.ShutdownGallery(); gallery=null;
         Application.Current.Shutdown();
+    }
+    internal async System.Threading.Tasks.Task LiveProbe()
+    {
+        try {
+            bool engine=Process.GetProcessesByName("wallpaper64").Length>0;
+            if(!engine) {Log.Write("LIVE PROBE INCONCLUSIVE: wallpaper64 process absent");return;}
+            if(windows.Count==0) {Log.Write("LIVE PROBE INCONCLUSIVE: no clock window");return;}
+            var r=Native.Bounds(windows[0].Handle);
+            int x=(int)r.X+20,y=(int)r.Y+20;
+            byte[] Capture() {
+                using var bmp=new System.Drawing.Bitmap(60,40);
+                using(var g=System.Drawing.Graphics.FromImage(bmp)) g.CopyFromScreen(x,y,0,0,new System.Drawing.Size(60,40));
+                var values=new byte[60*40*3]; int k=0;
+                for(int row=0;row<40;row++)for(int col=0;col<60;col++) {var c=bmp.GetPixel(col,row);values[k++]=c.R;values[k++]=c.G;values[k++]=c.B;}
+                return values;
+            }
+            var first=Capture();
+            await System.Threading.Tasks.Task.Delay(1500);
+            var second=Capture();
+            double delta=first.Zip(second,(a,b)=>Math.Abs(a-b)).Average();
+            Log.Write($"LIVE PROBE wallpaper64=yes window={windows[0].Handle:X} sample=({x},{y},60,40) elapsed=1.5s meanRGBDelta={delta:F3}; movement is evidence of live composited pixels, not isolated blur strength. Occlusion or a still segment makes this inconclusive.");
+        } catch(Exception e) {Log.Write("LIVE PROBE INCONCLUSIVE: "+e);Environment.ExitCode=1;}
+        finally {Application.Current.Shutdown();}
+    }
+    internal void AccentProbe()
+    {
+        try {
+            if(windows.Count==0) throw new InvalidOperationException("No clock window");
+            DesktopHost.ProbeAccent(windows[0].Handle,windows[0].Dark);
+            windows[0].ApplyTheme();
+        } catch(Exception e) { Log.Write("ACCENT PROBE FAIL: "+e);Environment.ExitCode=1; }
+        finally { Application.Current.Shutdown(); }
     }
     internal void OpenGallery()
     {
@@ -211,7 +255,7 @@ internal sealed class Manager : IDisposable
     }
     internal void FinishEditing()
     {
-        gallery?.FlushAppearance(); SaveAppearance();
+        SaveAppearance();
         editing=false;
         foreach(var w in windows) {w.SetEdit(false);w.Remember();}
         Save(); gallery?.Dismiss();
@@ -262,10 +306,6 @@ internal sealed class Manager : IDisposable
         disposed=true;retry.Stop();appearanceSave.Stop();gallery?.ShutdownGallery();
         Microsoft.Win32.SystemEvents.DisplaySettingsChanged-=DisplaysChanged; Microsoft.Win32.SystemEvents.TimeChanged-=TimeChanged;
         Microsoft.Win32.SystemEvents.UserPreferenceChanged-=PreferencesChanged;Microsoft.Win32.SystemEvents.PowerModeChanged-=PowerChanged;
-        foreach(var w in windows.ToArray())w.Close(); tray.Visible=false;tray.ContextMenuStrip?.Dispose();tray.Dispose();listener?.Dispose();
+        foreach(var w in windows.ToArray())w.Close(); tray.Visible=false;tray.ContextMenuStrip?.Dispose();var icon=tray.Icon;tray.Dispose();icon?.Dispose();listener?.Dispose();
     }
 }
-
-
-
-

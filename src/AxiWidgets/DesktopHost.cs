@@ -27,8 +27,8 @@ internal static class Native
     [DllImport("user32.dll")] internal static extern nint SendMessageTimeout(nint hwnd,uint msg,nint w,nint l,uint flags,uint timeout,out nint result);
     [DllImport("user32.dll",SetLastError=true)] internal static extern nint SetParent(nint hwnd,nint parent);
     [DllImport("user32.dll")] internal static extern nint GetParent(nint hwnd);
-    [DllImport("user32.dll",EntryPoint="GetWindowLongPtrW")] internal static extern nint GetLong(nint hwnd,int index);
-    [DllImport("user32.dll",EntryPoint="SetWindowLongPtrW")] internal static extern nint SetLong(nint hwnd,int index,nint value);
+    [DllImport("user32.dll",EntryPoint="GetWindowLongPtrW",SetLastError=true)] internal static extern nint GetLong(nint hwnd,int index);
+    [DllImport("user32.dll",EntryPoint="SetWindowLongPtrW",SetLastError=true)] internal static extern nint SetLong(nint hwnd,int index,nint value);
     [DllImport("user32.dll")] internal static extern bool SetWindowPos(nint hwnd,nint after,int x,int y,int w,int h,uint flags);
     [DllImport("user32.dll")] internal static extern bool GetWindowRect(nint hwnd,out Rectangle rect);
     [DllImport("user32.dll")] internal static extern bool ScreenToClient(nint hwnd,ref Point point);
@@ -39,6 +39,7 @@ internal static class Native
     [DllImport("gdi32.dll")] internal static extern nint CreateRoundRectRgn(int left,int top,int right,int bottom,int width,int height);
     [DllImport("user32.dll")] internal static extern int SetWindowRgn(nint hwnd,nint region,bool redraw);
     [DllImport("gdi32.dll")] internal static extern bool DeleteObject(nint obj);
+    [DllImport("user32.dll")] internal static extern bool DestroyIcon(nint icon);
     [DllImport("user32.dll")] internal static extern bool EnumDisplayMonitors(nint dc,nint clip,MonitorProc callback,nint data);
     [DllImport("user32.dll",CharSet=CharSet.Unicode)] internal static extern bool GetMonitorInfo(nint monitor,ref MonitorInfo info);
     [DllImport("shcore.dll")] internal static extern int GetDpiForMonitor(nint monitor,int type,out uint x,out uint y);
@@ -68,6 +69,8 @@ internal record Display(string Id,Rect Work,double Scale,bool Primary)
 
 internal sealed class DesktopHost
 {
+    private const int RoundedCorners=2; // DWMWCP_ROUND, the largest DWM preset.
+    internal const double ClockCornerRadius=8;
     internal nint Parent { get; private set; }
     internal bool Attach(nint hwnd)
     {
@@ -87,8 +90,10 @@ internal sealed class DesktopHost
         // Preserve WPF's top-level rendering surface. GWLP_HWNDPARENT sets
         // ownership for a popup; SetParent would convert it into a shell child.
         Native.SetLong(hwnd,-16,(nint)(((long)Native.GetLong(hwnd,-16)&~0x40000000L)|0x80000000L));
-        Native.SetLong(hwnd,-8,owner);
-        if(Native.GetLong(hwnd,-8)!=owner) { Log.Write("Desktop owner assignment failed"); return false; }
+        var priorOwner=Native.SetLong(hwnd,-8,owner);
+        int ownerError=Marshal.GetLastWin32Error();
+        var assigned=Native.GetLong(hwnd,-8);
+        if(assigned!=owner) { Log.Write($"Desktop owner assignment failed expected={owner:X}/{Native.Class(owner)} ownerParent={Native.GetParent(owner):X} ownerStyle=0x{Native.GetLong(owner,-16):X} actual={assigned:X}/{Native.Class(assigned)} prior={priorOwner:X} style=0x{Native.GetLong(hwnd,-16):X} setWin32={ownerError}"); return false; }
         Parent=owner;
         Move(hwnd,bounds);
         Log.Write($"Desktop owned popup owner={owner:X} class={Native.Class(owner)} hwnd={hwnd:X}");
@@ -120,15 +125,24 @@ internal sealed class DesktopHost
         // Accent composition did not clip cleanly to the custom HRGN. Use the
         // same compositor-owned contour as the working clock windows.
         Native.SetWindowRgn(hwnd,0,true);
-        int round=2,noBorder=unchecked((int)0xfffffffe);
+        int round=RoundedCorners,border=0x005D5D62;
+        Native.DwmSetWindowAttribute(hwnd,33,ref round,4);
+        Native.DwmSetWindowAttribute(hwnd,34,ref border,4);
+    }
+    internal static void RoundClock(nint hwnd)
+    {
+        // Accent Acrylic did not follow the custom HRGN. Let DWM clip the
+        // complete composited surface; WPF adds only a translucent outline.
+        Native.SetWindowRgn(hwnd,0,true);
+        int round=RoundedCorners,noBorder=unchecked((int)0xfffffffe);
         Native.DwmSetWindowAttribute(hwnd,33,ref round,4);
         Native.DwmSetWindowAttribute(hwnd,34,ref noBorder,4);
     }
-    private static bool SetAccent(nint hwnd,bool enabled,bool dark,bool blur=true,byte alpha=112)
+    private static bool SetAccent(nint hwnd,bool enabled,bool dark,bool blur=true,byte alpha=112,uint? rgb=null,int? state=null)
     {
         // Undocumented WCA_ACCENT_POLICY, isolated here. No injection or layered HWND.
-        var policy=new Native.AccentPolicy { State=enabled?(blur?4:2):0,Flags=enabled?2:0,
-            Color=enabled?((uint)alpha<<24)|(dark?0x00202020u:0x00F5F5F5u):0 };
+        var policy=new Native.AccentPolicy { State=enabled?(state??(blur?4:2)):0,Flags=enabled?2:0,
+            Color=enabled?((uint)alpha<<24)|(rgb??(dark?0x00202020u:0x00F5F5F5u)):0 };
         nint buffer=Marshal.AllocHGlobal(Marshal.SizeOf<Native.AccentPolicy>());
         try {
             Marshal.StructureToPtr(policy,buffer,false);
@@ -137,12 +151,22 @@ internal sealed class DesktopHost
         } catch(EntryPointNotFoundException) { return false; }
         finally { Marshal.FreeHGlobal(buffer); }
     }
+    internal static void ProbeAccent(nint hwnd,bool dark)
+    {
+        // One-shot API probe only. It does not establish visible blur or compare radii.
+        foreach(int state in new[] {2,3,4})
+            foreach(byte alpha in new byte[] {1,80,150,255}) {
+                bool accepted=SetAccent(hwnd,true,dark,alpha:alpha,rgb:0x001E1E22,state:state);
+                Log.Write($"ACCENT PROBE state={state} GradientColor=0x{((uint)alpha<<24)|0x001E1E22u:X8} accepted={accepted} hwnd={hwnd:X}");
+            }
+        SetAccent(hwnd,false,dark);
+    }
     internal static bool Backdrop(nint hwnd,bool dark,bool enabled,bool editing,AppearanceSettings? appearance=null)
     {
         // DWM alone owns the outer contour: no HRGN and no second WPF radius.
         Native.SetWindowRgn(hwnd,0,true);
-        int theme=dark?1:0, corner=2;
-        int border=editing?0x00FFBF00:(dark?0x00484848:0x00C0C0C0);
+        int theme=dark?1:0, corner=RoundedCorners;
+        int border=editing?0x00627DA7:(dark?0x005D5D62:0x00D0D0D0);
         Native.DwmSetWindowAttribute(hwnd,20,ref theme,4);
         Native.DwmSetWindowAttribute(hwnd,33,ref corner,4);
         Native.DwmSetWindowAttribute(hwnd,34,ref border,4);
@@ -157,7 +181,7 @@ internal sealed class DesktopHost
         int hr=Native.DwmSetWindowAttribute(hwnd,38,ref acrylic,4);
         // Widget opacity is drawn once by WPF above the live compositor surface.
         // Keep native tint minimal; Windows can ignore/clamp its alpha with Acrylic.
-        bool accentAccepted=enabled&&!child&&SetAccent(hwnd,true,dark,appearance?.Blur??true,appearance!=null?(byte)1:(dark?(byte)112:(byte)136));
+        bool accentAccepted=enabled&&!child&&SetAccent(hwnd,true,dark,appearance?.Blur??true,appearance!=null?(byte)1:(dark?(byte)112:(byte)136),appearance?.TintRgb);
         bool active=enabled&&!child&&hr>=0&&frame>=0&&accentAccepted;
         if(!active) {
             SetAccent(hwnd,false,dark);
@@ -169,7 +193,7 @@ internal sealed class DesktopHost
             target.BackgroundColor=active?System.Windows.Media.Colors.Transparent:
                 dark?System.Windows.Media.Color.FromRgb(32,32,32):System.Windows.Media.Colors.WhiteSmoke;
         }
-        Log.Write($"Backdrop backend=AccentPolicy requested={enabled} blur={appearance?.Blur??true} tintAlpha={appearance?.TintAlpha} accepted={active} owner={Native.GetParent(hwnd):X} frame=0x{frame:X8} acrylic=0x{hr:X8}; visual effect not verified.");
+        Log.Write($"Backdrop backend=AccentPolicy requested={enabled} blur={appearance?.Blur??true} nativeAlpha={(appearance==null?112:1)} tintRgb=0x{appearance?.TintRgb:X6} wpfTintAlpha={appearance?.TintAlpha} accepted={active} owner={Native.GetParent(hwnd):X} frame=0x{frame:X8} acrylic=0x{hr:X8}; visual effect not verified.");
         return active;
     }
 }

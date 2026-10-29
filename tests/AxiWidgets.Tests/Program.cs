@@ -28,14 +28,20 @@ Check("legacy layout keeps instance settings without System Acrylic",()=> {
     Equal(120,clock.X); Equal(80,clock.Y);
     if(System.Text.Json.JsonSerializer.Serialize(clock).Contains("NativeAcrylic")) throw new Exception("Removed backend selector persisted");
 });
-Check("global transparency bounds and invalid values",()=> {
-    var a=new AppearanceSettings {Transparency=-50}; a.Normalize(); Equal(0,a.Transparency); Equal(255,a.TintAlpha);
-    a.Transparency=150; a.Normalize(); Equal(95,a.Transparency); Equal(13,a.TintAlpha);
-    a.Transparency=double.NaN; a.Normalize(); Equal(56,a.Transparency);
+Check("tint opacity bounds and invalid values",()=> {
+    var a=new AppearanceSettings {TintOpacity=-50};a.Normalize();Equal(0,a.TintOpacity);Equal(0,a.TintAlpha);
+    a.TintOpacity=150;a.Normalize();Equal(100,a.TintOpacity);Equal(255,a.TintAlpha);
+    a.TintOpacity=double.NaN;a.Normalize();Equal(15,a.TintOpacity);
 });
-Check("global appearance round trip",()=> {
-    var a=System.Text.Json.JsonSerializer.Deserialize<AppearanceSettings>(System.Text.Json.JsonSerializer.Serialize(new AppearanceSettings {Blur=false,Transparency=75}))!;
-    if(a.Blur) throw new Exception("Blur preference lost"); Equal(75,a.Transparency); Equal(64,a.TintAlpha);
+Check("independent tint color and opacity round trip",()=> {
+    var a=System.Text.Json.JsonSerializer.Deserialize<AppearanceSettings>(System.Text.Json.JsonSerializer.Serialize(new AppearanceSettings {Blur=false,TintColor="#804020",TintOpacity=75}))!;
+    if(a.Blur||a.TintColor!="#804020"||a.TintRgb!=0x804020)throw new Exception("Tint settings lost");
+    Equal(75,a.TintOpacity);Equal(191,a.TintAlpha);a.Normalize();if(!a.Blur)throw new Exception("Native blur must stay enabled");
 });
-Console.WriteLine($"{passed}/20 passed");
-
+Check("reject malformed tint colors",()=> {
+    foreach(var value in new string?[] {null,"red","#GGGGGG","#12345","#12345678"})
+        if(AppearanceSettings.TryColor(value,out _))throw new Exception($"Accepted {value}");
+    var a=new AppearanceSettings {TintColor="invalid"};a.Normalize();
+    if(a.TintColor!="#1E1E22")throw new Exception("Wrong tint fallback");
+});
+Console.WriteLine($"{passed}/21 passed");

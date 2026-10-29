@@ -31,24 +31,10 @@
             <Setter Property="Margin" Value="0,0,12,0"/>
             <Setter Property="VerticalAlignment" Value="Top"/>
         </Style>
-        <Style x:Key="AppearanceSlider" TargetType="Slider">
-            <Setter Property="Template"><Setter.Value>
-                <ControlTemplate TargetType="Slider">
-                    <Grid Height="24" Background="Transparent">
-                        <Border Background="#55555E" Height="4" CornerRadius="2" Margin="6,0"/>
-                        <Track x:Name="PART_Track" Minimum="{TemplateBinding Minimum}" Maximum="{TemplateBinding Maximum}" Value="{TemplateBinding Value}">
-                            <Track.DecreaseRepeatButton><RepeatButton Command="Slider.DecreaseLarge" Focusable="False"><RepeatButton.Template><ControlTemplate TargetType="RepeatButton"><Border Background="#0A64D6" Height="4" CornerRadius="2"/></ControlTemplate></RepeatButton.Template></RepeatButton></Track.DecreaseRepeatButton>
-                            <Track.Thumb><Thumb Width="14" Height="14"><Thumb.Template><ControlTemplate TargetType="Thumb"><Ellipse Fill="White" Stroke="#0A64D6" StrokeThickness="2"/></ControlTemplate></Thumb.Template></Thumb></Track.Thumb>
-                            <Track.IncreaseRepeatButton><RepeatButton Command="Slider.IncreaseLarge" Focusable="False"><RepeatButton.Template><ControlTemplate TargetType="RepeatButton"><Border Background="Transparent"/></ControlTemplate></RepeatButton.Template></RepeatButton></Track.IncreaseRepeatButton>
-                        </Track>
-                    </Grid>
-                </ControlTemplate>
-            </Setter.Value></Setter>
-        </Style>
-    </Window.Resources>
+</Window.Resources>
     <Border x:Name="Surface" Background="#CE202024">
         <Grid Margin="20">
-            <Grid.ColumnDefinitions><ColumnDefinition Width="180"/><ColumnDefinition Width="20"/><ColumnDefinition Width="*"/><ColumnDefinition Width="20"/><ColumnDefinition Width="220"/></Grid.ColumnDefinitions>
+            <Grid.ColumnDefinitions><ColumnDefinition Width="180"/><ColumnDefinition Width="20"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
             <StackPanel>
                 <Border Background="#3A3A3E" CornerRadius="8" Height="33">
                     <Grid Margin="12,0">
@@ -73,7 +59,7 @@
                             <Button x:Name="DigitalPreview" Style="{StaticResource PreviewButton}" Click="AddDigital" AutomationProperties.Name="Add Digital Clock" ToolTip="Add Digital Clock">
                                 <StackPanel Width="232">
                                     <Grid Margin="5,0,5,0">
-                                        <Border Background="#72202024" BorderBrush="#3A3A3E" BorderThickness="1" CornerRadius="16" Width="216" Height="115" Margin="5,5,0,0">
+                                        <Border Background="#72202024" BorderBrush="#38FFFFFF" BorderThickness="0.75" CornerRadius="8" Width="216" Height="115" Margin="5,5,0,0">
                                             <StackPanel VerticalAlignment="Center">
                                                 <TextBlock x:Name="MinutesPreview" Text="12:00" FontSize="39" FontWeight="Light" HorizontalAlignment="Center"/>
                                                 <TextBlock x:Name="DatePreview" Text="Wednesday, 28 October" FontSize="10" Foreground="{StaticResource Muted}" HorizontalAlignment="Center" Margin="0,3,0,0"/>
@@ -89,7 +75,7 @@
                             <Button x:Name="SecondsButton" Style="{StaticResource PreviewButton}" Click="AddSeconds" AutomationProperties.Name="Add Clock with seconds" ToolTip="Add Clock with seconds">
                                 <StackPanel Width="232">
                                     <Grid Margin="5,0,5,0">
-                                        <Border Background="#72202024" BorderBrush="#3A3A3E" BorderThickness="1" CornerRadius="16" Width="216" Height="115" Margin="5,5,0,0">
+                                        <Border Background="#72202024" BorderBrush="#38FFFFFF" BorderThickness="0.75" CornerRadius="8" Width="216" Height="115" Margin="5,5,0,0">
                                             <StackPanel VerticalAlignment="Center">
                                                 <TextBlock x:Name="SecondsPreview" Text="12:00:00" FontSize="34" FontWeight="Light" HorizontalAlignment="Center"/>
                                                 <TextBlock x:Name="SecondsDatePreview" Text="Wednesday, 28 October" FontSize="10" Foreground="{StaticResource Muted}" HorizontalAlignment="Center" Margin="0,3,0,0"/>
@@ -109,32 +95,12 @@
                 </ScrollViewer>
                 <Grid Grid.Row="1" Margin="0,20,0,0">
                     
-                    <TextBlock Text="Click a preview to add it · drag widgets to move them · right-click a widget for settings" TextWrapping="Wrap" Foreground="{StaticResource Muted}" VerticalAlignment="Center" Margin="0,0,20,0"/>
+                    <TextBlock Text="Click a preview to add it · drag widgets to move them · right-click a widget for settings" TextWrapping="Wrap" Foreground="{StaticResource Muted}" VerticalAlignment="Center" Margin="0,0,100,0"/>
+                    <Button x:Name="DoneButton" Width="76" HorizontalAlignment="Right" Style="{StaticResource FlatButton}" Background="#0A64D6" Height="33" FontWeight="SemiBold" Content="Done" Click="DoneClicked"/>
                     
                 </Grid>
             </Grid>
-            <Grid Grid.Column="4">
-                <Grid.RowDefinitions><RowDefinition Height="*"/><RowDefinition Height="Auto"/></Grid.RowDefinitions>
-                <Border Background="#302F2F35" BorderBrush="#3A3A40" BorderThickness="1" CornerRadius="10" Padding="14" VerticalAlignment="Top">
-                    <StackPanel>
-                        <TextBlock Text="Global appearance" FontWeight="SemiBold" Margin="0,0,0,4"/>
-                        <TextBlock Text="Applies to all widgets" Foreground="{StaticResource Muted}" FontSize="11" Margin="0,0,0,12"/>
-                        <DockPanel Margin="0,4,0,3">
-                            <TextBlock x:Name="BlurValue" DockPanel.Dock="Right" Foreground="{StaticResource Muted}" TextAlignment="Right"/>
-                            <TextBlock Text="Blur"/>
-                        </DockPanel>
-                        <Slider x:Name="BlurSlider" Style="{StaticResource AppearanceSlider}" Minimum="0" Maximum="1" TickFrequency="1" IsSnapToTickEnabled="True" SmallChange="1" LargeChange="1" ValueChanged="BlurChanged" AutomationProperties.Name="Native blur off or on"/>
-                        <TextBlock Text="Off / Native blur" FontSize="11" Foreground="{StaticResource Muted}" Margin="0,3,0,0"/>
-                        <DockPanel Margin="0,12,0,3">
-                            <TextBlock x:Name="TransparencyValue" DockPanel.Dock="Right" Foreground="{StaticResource Muted}" TextAlignment="Right"/>
-                            <TextBlock Text="Transparency"/>
-                        </DockPanel>
-                        <Slider x:Name="TransparencySlider" Style="{StaticResource AppearanceSlider}" Minimum="0" Maximum="95" TickFrequency="1" IsSnapToTickEnabled="True" SmallChange="1" LargeChange="5" ValueChanged="TransparencyChanged" AutomationProperties.Name="Widget background transparency"/>
-                        <TextBlock Text="Text stays fully visible" Foreground="{StaticResource Muted}" FontSize="11" Margin="0,6,0,0"/>
-                    </StackPanel>
-                </Border>
-<Button x:Name="DoneButton" Grid.Row="1" Width="76" HorizontalAlignment="Right" Style="{StaticResource FlatButton}" Background="#0A64D6" Height="33" FontWeight="SemiBold" Content="Done" Click="DoneClicked"/>
-            </Grid>
+
         </Grid>
     </Border>
 </Window>

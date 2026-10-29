@@ -34,7 +34,7 @@ The gallery follows the reference's 1000 × 520 layout, dark translucent surface
 - Drag desktop clocks to snap to edges, centers and neighboring gaps. Threshold/gap: 12 DIP; screen inset: 8 DIP; release radius: 18 DIP.
 - Right-click a desktop clock while editing for **Show seconds**, **Show date**, and **Remove clock**.
 - **Done** hides the gallery, releases mouse capture, removes guides, disables widget input and saves positions.
-- Use the right-hand **Global appearance** column for the separate **Blur** strip (Off / Native) and **Transparency** slider (0–95%). The Blur strip has two discrete positions; continuous blur radius is not implemented. These settings apply immediately to every existing and future clock. At 0% the background is solid. Turning blur off selects native translucent tint without blur. Text stays opaque. The gallery keeps its own background for readability. Old per-clock Acrylic flags no longer override global appearance.
+- Every clock uses Native Acrylic with a fixed 15% `#1E1E22` tint. The gallery has no appearance controls. DWM clips the actual window corners; a separate translucent 0.6-DIP stroke supplies the fine outline. A custom 20-DIP window region was removed after the user demonstrated rectangular Acrylic leaking behind its curved outline.
 
 Only the gallery is topmost. Desktop clocks remain below ordinary applications. The gallery is reusable, and its preview timer stops while hidden. Exiting the operating-system session or terminating the application still tears it down; Done does not exit the manager.
 
@@ -50,7 +50,7 @@ Native test run, after closing the normal app:
 
 The smoke harness verifies real HWND ownership/input transitions, persistence, editor tool/topmost styles, close suppression, search, preview actions and Done locking. It writes `gallery-layout.png` using the WPF renderer for layout inspection (the image excludes the live DWM background). It modifies only its selected data folder and exits. Each run adds test clocks.
 
-The 20 pure unit tests are an executable harness, not `dotnet test`:
+The 21 pure unit tests are an executable harness, not `dotnet test`:
 
 ```powershell
 ./.tools/dotnet/dotnet run --project tests/AxiWidgets.Tests -c Release
@@ -69,6 +69,8 @@ The 20 pure unit tests are an executable harness, not `dotnet test`:
 Desktop clocks are top-level WS_POPUP windows owned by the discovered desktop host, with bottom Z-order enforced. SetParent shell children were abandoned after invisible rendering was reproduced. Monitor IDs use display-device names, not stable hardware identities. Mixed-DPI hardware, Win+D/fullscreen and Explorer restart behavior still need the full validation matrix. Native Acrylic success on this machine is not a cross-version guarantee.
 
 [Architecture history](docs/architecture.md) · [Validation](docs/validation.md)
+
+See [live glass investigation](docs/live-glass-investigation.md) for the current layering, AccentPolicy mode probe and the separate Windows Composition Gaussian blur experiment status.
 
 Gallery design adapted from [VaticUI/DeskWidgets](https://github.com/VaticUI/DeskWidgets). The WPF implementation contains no Python runtime or reference bitmap assets. See [third-party notice](THIRD-PARTY-NOTICES.md). Source is MIT licensed.
 
