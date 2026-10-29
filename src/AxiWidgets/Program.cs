@@ -51,7 +51,7 @@ internal static class Program
         app.Run();
     }
 }
-internal sealed class Manager : IDisposable
+internal sealed partial class Manager : IDisposable
 {
     private readonly List<ClockWindow> windows=[];
     private readonly Forms.NotifyIcon tray=new() { Icon=TrayArtwork.Create(),Text="AxiWidgets" };
@@ -82,7 +82,7 @@ internal sealed class Manager : IDisposable
             if(!double.IsFinite(state.X)||!double.IsFinite(state.Y)) {state.X=48;state.Y=48;}
             Add(state);
         }
-        tray.MouseClick+=(_,_)=>OpenGallery(); tray.Visible=true;
+        tray.MouseClick+=TrayClicked; tray.Visible=true;
         Microsoft.Win32.SystemEvents.DisplaySettingsChanged+=DisplaysChanged;
         Microsoft.Win32.SystemEvents.TimeChanged+=TimeChanged;
         Microsoft.Win32.SystemEvents.UserPreferenceChanged+=PreferencesChanged;
@@ -215,6 +215,17 @@ internal sealed class Manager : IDisposable
             Log.Write("WIDGET SMOKE PASS: independent gallery creation; calendar disabled/reminders enabled in normal mode; temporary text editor Enter/Escape; shared task refresh, toggle and persistence; native DPI dimensions; drag/capture/snap path.");
             Log.Write("GALLERY SMOKE PASS: tool/topmost styles, close/move/resize/minimize/maximize suppression, search and timer stop, two preview actions, Done locks input and stops timer, reusable window.");
             Log.Write("SMOKE PASS: native desktop parent, normal/edit input, independent instances, JSON save/read, input disabled on exit edit.");
+            TrayClicked(tray,new Forms.MouseEventArgs(Forms.MouseButtons.Right,1,0,0,0));
+            if(trayMenu?.IsOpen!=true||gallery?.IsVisible==true||editing)throw new Exception($"Right tray click did not open menu independently: menu={trayMenu?.IsOpen} gallery={gallery?.IsVisible} editing={editing}");
+            ((System.Windows.Controls.MenuItem)trayMenu.Items[0]).RaiseEvent(new RoutedEventArgs(System.Windows.Controls.MenuItem.ClickEvent));
+            if(gallery?.IsVisible!=true||!editing||trayMenu.IsOpen)throw new Exception("Tray open gallery action failed");
+            FinishEditing();
+            TrayClicked(tray,new Forms.MouseEventArgs(Forms.MouseButtons.Left,1,0,0,0));
+            if(gallery?.IsVisible!=true)throw new Exception("Left tray click no longer opens gallery");
+            FinishEditing();
+            TrayClicked(tray,new Forms.MouseEventArgs(Forms.MouseButtons.Right,1,0,0,0));
+            ((System.Windows.Controls.MenuItem)trayMenu.Items[2]).RaiseEvent(new RoutedEventArgs(System.Windows.Controls.MenuItem.ClickEvent));
+            Log.Write("TRAY SMOKE PASS: styled right-click menu, open gallery action, left-click gallery preserved, Exit requests full shutdown and saves layout.");
         } catch(Exception e) {Log.Write("SMOKE FAIL: "+e);Environment.ExitCode=1;}
         gallery?.ShutdownGallery(); gallery=null;
         Application.Current.Shutdown();
@@ -307,6 +318,8 @@ internal sealed class Manager : IDisposable
     private void PowerChanged(object sender,Microsoft.Win32.PowerModeChangedEventArgs e) { if(e.Mode==Microsoft.Win32.PowerModes.Resume) TimeChanged(sender,e); }
     public void Dispose()
     {
+        if(disposed)return;
+        tray.MouseClick-=TrayClicked;if(trayMenu!=null){trayMenu.IsOpen=false;trayMenu.Items.Clear();trayMenu=null;}
         disposed=true;retry.Stop();appearanceSave.Stop();gallery?.ShutdownGallery();
         Microsoft.Win32.SystemEvents.DisplaySettingsChanged-=DisplaysChanged; Microsoft.Win32.SystemEvents.TimeChanged-=TimeChanged;
         Microsoft.Win32.SystemEvents.UserPreferenceChanged-=PreferencesChanged;Microsoft.Win32.SystemEvents.PowerModeChanged-=PowerChanged;

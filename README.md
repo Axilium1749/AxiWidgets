@@ -26,7 +26,7 @@ Close any existing instance first; a second process exits. There is no installer
 
 ## Gallery and editing
 
-Click the AxiWidgets notification icon (left or right button) to open the gallery. The icon may be in the taskbar overflow area. The old tray context menu is gone.
+Left-click the AxiWidgets notification icon to open the gallery. Right-click opens the styled menu with Open widgets and Exit actions. Exit saves the layout and closes the entire application. The icon may be in the taskbar overflow area.
 
 The gallery follows the reference's 1000 × 520 layout, dark translucent surface, 220-DIP sidebar, search, blue Clock selection, green add badges and Done button. Three categories are available: **Clock**, **Calendar**, and **Reminders**. Clock has Digital and With seconds variants. Calendar and Reminders use 364 × 384 DIP cards (364 × 384 physical pixels at 100% scale).
 
