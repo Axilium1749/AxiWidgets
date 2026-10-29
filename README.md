@@ -1,12 +1,14 @@
 # AxiWidgets
 
-Windows 11 desktop clocks in C# / .NET 10 / WPF + Win32. One process, independent clocks, native Acrylic, magnetic alignment and portable JSON persistence. No Python, browser runtime or external NuGet packages.
+Windows 11 desktop clocks with a C# / .NET 10 / WPF manager and C++/WinRT Windows Composition cards. One process, independent clocks, live backdrop blur, magnetic alignment and portable JSON persistence. No Python or browser runtime.
 
-The user confirmed native Acrylic works with their live wallpaper on Windows 11 26H2. The gray SystemBackdrop variant has been removed. Native composition uses an undocumented Windows API and remains version-dependent. See [validation](docs/validation.md).
+The user confirmed the native Composition prototype works with Wallpaper Engine. Desktop clocks now use that renderer; the existing WPF gallery and menus are retained. The gallery still uses AccentPolicy. See [validation](docs/validation.md) for earlier host checks.
 
 ## Build and run
 
 Requires Windows x64 and .NET SDK **10.0.403**. The workspace SDK is isolated in `.tools/dotnet` and ignored by Git. A fresh checkout requires the official SDK installed globally or placed there.
+
+The native build also uses the local MSVC 14.44 and Windows SDK 10.0.26100 toolchain under `.tools/native-toolchain`. `src/AxiWidgets.Native/Build.ps1` defines its paths; MSBuild builds and copies the DLL automatically. No separate widget process is started.
 
 ```powershell
 ./build.ps1 -Test
@@ -34,7 +36,7 @@ The gallery follows the reference's 1000 × 520 layout, dark translucent surface
 - Drag desktop clocks to snap to edges, centers and neighboring gaps. Threshold/gap: 12 DIP; screen inset: 8 DIP; release radius: 18 DIP.
 - Right-click a desktop clock while editing for **Show seconds**, **Show date**, and **Remove clock**.
 - **Done** hides the gallery, releases mouse capture, removes guides, disables widget input and saves positions.
-- Every clock uses Native Acrylic with a fixed 15% `#1E1E22` tint. The gallery has no appearance controls. DWM clips the actual window corners; a separate translucent 0.6-DIP stroke supplies the fine outline. A custom 20-DIP window region was removed after the user demonstrated rectangular Acrylic leaking behind its curved outline.
+- Every clock uses HostBackdropBrush with a native Gaussian blur and a fixed 15% `#1E1E22` tint. A shared 30-DIP Composition clip covers glass, text, and the fine 0.6-DIP outline; pixels outside the rounded card are transparent. The gallery has no appearance controls.
 
 Only the gallery is topmost. Desktop clocks remain below ordinary applications. The gallery is reusable, and its preview timer stops while hidden. Exiting the operating-system session or terminating the application still tears it down; Done does not exit the manager.
 
@@ -56,21 +58,20 @@ The 21 pure unit tests are an executable harness, not `dotnet test`:
 ./.tools/dotnet/dotnet run --project tests/AxiWidgets.Tests -c Release
 ```
 
-`--poc=normal`, `--poc=noactivate` and `--poc=desktop` remain as host diagnostics; they all use the native Acrylic implementation when enabled. Normal POC deliberately appears in the taskbar. System Acrylic is no longer selectable.
+`--poc=normal`, `--poc=noactivate` and `--poc=desktop` remain as host diagnostics; all use the native Composition card. Only desktop mode attaches the popup to the desktop owner. The gray SystemBackdrop variant is not selectable.
 
 ## Architecture and limits
 
 - `AxiWidgets.Core`: independent geometry and boundary-based clock scheduling.
-- `DesktopHost`: desktop ownership, coordinates, native composition and window styles.
-- `ClockWindow`: clock rendering, drag and instance settings.
+- `DesktopHost`: desktop ownership, coordinates and window styles; the gallery's legacy backdrop.
+- `AxiWidgets.Native`: one native HWND per clock, shared compositor/graphics device, live backdrop and DirectWrite text. Text redraws only at the displayed time boundary or after a settings/DPI change.
+- `ClockWindow`: native card lifecycle, scheduling, drag and instance settings.
 - `GalleryWindow`: fixed editor and clock previews.
 - `Manager`: lifecycle, tray launcher, persistence and shell recovery.
 
 Desktop clocks are top-level WS_POPUP windows owned by the discovered desktop host, with bottom Z-order enforced. SetParent shell children were abandoned after invisible rendering was reproduced. Monitor IDs use display-device names, not stable hardware identities. Mixed-DPI hardware, Win+D/fullscreen and Explorer restart behavior still need the full validation matrix. Native Acrylic success on this machine is not a cross-version guarantee.
 
 [Architecture history](docs/architecture.md) · [Validation](docs/validation.md)
-
-See [live glass investigation](docs/live-glass-investigation.md) for the current layering, AccentPolicy mode probe and the separate Windows Composition Gaussian blur experiment status.
 
 Gallery design adapted from [VaticUI/DeskWidgets](https://github.com/VaticUI/DeskWidgets). The WPF implementation contains no Python runtime or reference bitmap assets. See [third-party notice](THIRD-PARTY-NOTICES.md). Source is MIT licensed.
 

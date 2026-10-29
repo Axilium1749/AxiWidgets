@@ -136,34 +136,25 @@ internal sealed class Manager : IDisposable
             if(windows.Count==0) Add(new ClockState());
             var first=windows[0];
             if(!Native.IsWindow(first.Handle)||Native.GetParent(first.Handle)==0) throw new Exception("No desktop parent");
+            long clockStyle=(long)Native.GetLong(first.Handle,-20);
+            if((clockStyle&0x08200080)!=0x08200080||(clockStyle&(8|0x80000))!=0||Native.Class(first.Handle)!="AxiWidgets.NativeCard")
+                throw new Exception("Native clock window styles invalid");
             if(Native.IsWindowEnabled(first.Handle)) throw new Exception("Normal mode accepts input");
-            double originalOpacity=Appearance.TintOpacity; string originalColor=Appearance.TintColor;
-            ChangeAppearance(15,"#1E1E22");
-            Log.Write($"SMOKE Acrylic request accepted={first.AcrylicAccepted}");
-            if(first.AcrylicAccepted) {
-                byte RenderTintAlpha(double opacity) {
-                    ChangeAppearance(opacity,"#1E1E22"); first.UpdateLayout();
-                    var rendered=new System.Windows.Media.Imaging.RenderTargetBitmap((int)first.ActualWidth,(int)first.ActualHeight,96,96,System.Windows.Media.PixelFormats.Pbgra32);
-                    rendered.Render(first);
-                    var pixel=new byte[4];
-                    rendered.CopyPixels(new Int32Rect(20,20,1,1),pixel,4,0);
-                    return pixel[3];
-                }
-                byte light=RenderTintAlpha(20),dense=RenderTintAlpha(80);
-                if(dense-light<100) throw new Exception($"Transparency did not change rendered tint: {dense}/{light}");
-                Log.Write($"TRANSPARENCY RENDER PASS: blur on, alpha at 20%={light}, at 80%={dense}");
-            }
-            ChangeAppearance(0,"#1E1E22");
-            if(!Appearance.Blur || Appearance.TintAlpha!=0) throw new Exception("Native blur or zero tint did not apply");
-            ChangeAppearance(originalOpacity,originalColor);
+            if(!first.AcrylicAccepted) throw new Exception("Native composition unavailable");
             editing=true; first.SetEdit(true);
             if(!Native.IsWindowEnabled(first.Handle)) throw new Exception("Edit mode disabled");
             Add(new ClockState { X=380,Y=48 });
             if(Neighbors(first).Count()!=windows.Count-1) throw new Exception("Instance enumeration failed");
             first.UpdateContextMenu();
             var clockMenu=first.ContextMenu!;
-            clockMenu.PlacementTarget=first;
-            clockMenu.IsOpen=true;
+            first.OpenMenu();
+            foreach(var index in new[] {0,1}) {
+                var toggle=(System.Windows.Controls.MenuItem)clockMenu.Items[index];
+                bool before=index==0?first.State.Seconds:first.State.Date;
+                toggle.RaiseEvent(new RoutedEventArgs(System.Windows.Controls.MenuItem.ClickEvent));
+                if((index==0?first.State.Seconds:first.State.Date)==before) throw new Exception("Clock menu toggle failed");
+                toggle.RaiseEvent(new RoutedEventArgs(System.Windows.Controls.MenuItem.ClickEvent));
+            }
             clockMenu.ApplyTemplate(); clockMenu.UpdateLayout();
             var menuBitmap=new System.Windows.Media.Imaging.RenderTargetBitmap((int)Math.Ceiling(clockMenu.ActualWidth),(int)Math.Ceiling(clockMenu.ActualHeight),96,96,System.Windows.Media.PixelFormats.Pbgra32);
             menuBitmap.Render(clockMenu);
@@ -241,8 +232,7 @@ internal sealed class Manager : IDisposable
     {
         try {
             if(windows.Count==0) throw new InvalidOperationException("No clock window");
-            DesktopHost.ProbeAccent(windows[0].Handle,windows[0].Dark);
-            windows[0].ApplyTheme();
+            Log.Write("Clock backend=WindowsComposition HostBackdropBrush; legacy AccentPolicy probe is retired for clocks.");
         } catch(Exception e) { Log.Write("ACCENT PROBE FAIL: "+e);Environment.ExitCode=1; }
         finally { Application.Current.Shutdown(); }
     }
@@ -306,6 +296,6 @@ internal sealed class Manager : IDisposable
         disposed=true;retry.Stop();appearanceSave.Stop();gallery?.ShutdownGallery();
         Microsoft.Win32.SystemEvents.DisplaySettingsChanged-=DisplaysChanged; Microsoft.Win32.SystemEvents.TimeChanged-=TimeChanged;
         Microsoft.Win32.SystemEvents.UserPreferenceChanged-=PreferencesChanged;Microsoft.Win32.SystemEvents.PowerModeChanged-=PowerChanged;
-        foreach(var w in windows.ToArray())w.Close(); tray.Visible=false;tray.ContextMenuStrip?.Dispose();var icon=tray.Icon;tray.Dispose();icon?.Dispose();listener?.Dispose();
+        foreach(var w in windows.ToArray())w.Close(); tray.Visible=false;tray.ContextMenuStrip?.Dispose();var icon=tray.Icon;tray.Dispose();icon?.Dispose();listener?.Dispose();NativeCard.Check(NativeCard.Shutdown());
     }
 }

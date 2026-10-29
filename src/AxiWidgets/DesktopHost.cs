@@ -34,6 +34,13 @@ internal static class Native
     [DllImport("user32.dll")] internal static extern bool ScreenToClient(nint hwnd,ref Point point);
     [DllImport("user32.dll")] internal static extern bool GetCursorPos(out Point point);
     [DllImport("user32.dll")] internal static extern bool IsWindow(nint hwnd);
+    [DllImport("user32.dll")] internal static extern bool IsWindowVisible(nint hwnd);
+    [DllImport("user32.dll")] internal static extern bool ShowWindow(nint hwnd,int command);
+    [DllImport("user32.dll")] internal static extern nint SetCapture(nint hwnd);
+    [DllImport("user32.dll")] internal static extern nint GetCapture();
+    [DllImport("user32.dll")] internal static extern bool ReleaseCapture();
+    [DllImport("user32.dll",EntryPoint="LoadCursorW")] internal static extern nint LoadCursor(nint module,nint id);
+    [DllImport("user32.dll")] internal static extern nint SetCursor(nint cursor);
     [DllImport("user32.dll")] internal static extern bool EnableWindow(nint hwnd,bool enabled);
     [DllImport("user32.dll")] internal static extern bool IsWindowEnabled(nint hwnd);
     [DllImport("gdi32.dll")] internal static extern nint CreateRoundRectRgn(int left,int top,int right,int bottom,int width,int height);

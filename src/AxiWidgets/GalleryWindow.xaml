@@ -59,7 +59,7 @@
                             <Button x:Name="DigitalPreview" Style="{StaticResource PreviewButton}" Click="AddDigital" AutomationProperties.Name="Add Digital Clock" ToolTip="Add Digital Clock">
                                 <StackPanel Width="232">
                                     <Grid Margin="5,0,5,0">
-                                        <Border Background="#72202024" BorderBrush="#38FFFFFF" BorderThickness="0.75" CornerRadius="8" Width="216" Height="115" Margin="5,5,0,0">
+                                        <Border Background="#7047474B" BorderBrush="#32FFFFFF" BorderThickness="0.6" CornerRadius="21.6" UseLayoutRounding="False" SnapsToDevicePixels="False" Width="216" Height="115" Margin="5,5,0,0">
                                             <StackPanel VerticalAlignment="Center">
                                                 <TextBlock x:Name="MinutesPreview" Text="12:00" FontSize="39" FontWeight="Light" HorizontalAlignment="Center"/>
                                                 <TextBlock x:Name="DatePreview" Text="Wednesday, 28 October" FontSize="10" Foreground="{StaticResource Muted}" HorizontalAlignment="Center" Margin="0,3,0,0"/>
@@ -75,7 +75,7 @@
                             <Button x:Name="SecondsButton" Style="{StaticResource PreviewButton}" Click="AddSeconds" AutomationProperties.Name="Add Clock with seconds" ToolTip="Add Clock with seconds">
                                 <StackPanel Width="232">
                                     <Grid Margin="5,0,5,0">
-                                        <Border Background="#72202024" BorderBrush="#38FFFFFF" BorderThickness="0.75" CornerRadius="8" Width="216" Height="115" Margin="5,5,0,0">
+                                        <Border Background="#7047474B" BorderBrush="#32FFFFFF" BorderThickness="0.6" CornerRadius="21.6" UseLayoutRounding="False" SnapsToDevicePixels="False" Width="216" Height="115" Margin="5,5,0,0">
                                             <StackPanel VerticalAlignment="Center">
                                                 <TextBlock x:Name="SecondsPreview" Text="12:00:00" FontSize="34" FontWeight="Light" HorizontalAlignment="Center"/>
                                                 <TextBlock x:Name="SecondsDatePreview" Text="Wednesday, 28 October" FontSize="10" Foreground="{StaticResource Muted}" HorizontalAlignment="Center" Margin="0,3,0,0"/>
