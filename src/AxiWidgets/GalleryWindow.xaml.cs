@@ -41,8 +41,8 @@ internal partial class GalleryWindow : Window
     }
     internal void ApplyBackdrop()
     {
-        bool acrylic=DesktopHost.Backdrop(Handle,true,true,false);
-        Surface.Background=new SolidColorBrush(acrylic?Color.FromArgb(206,32,32,36):Color.FromRgb(32,32,36));
+        DesktopHost.GalleryBackdrop(Handle);
+        Surface.Background=new SolidColorBrush(Color.FromRgb(32,32,36));
         DesktopHost.RoundGallery(Handle);
     }
     internal void Place()

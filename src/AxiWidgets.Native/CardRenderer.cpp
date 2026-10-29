@@ -111,7 +111,7 @@ struct Card
         auto clip=c.CreateRectangleClip();clip.Left(0);clip.Top(0);clip.Right(300);clip.Bottom(160);clip.TopLeftRadius({30,30});clip.TopRightRadius({30,30});clip.BottomLeftRadius({30,30});clip.BottomRightRadius({30,30});root.Clip(clip);
         auto effect=r.blur.CreateBrush();effect.SetSourceParameter(L"desktop",c.CreateHostBackdropBrush());
         auto glass=c.CreateSpriteVisual();glass.Size({300,160});glass.Brush(effect);root.Children().InsertAtBottom(glass);
-        tint=c.CreateColorBrush({38,30,30,34});auto shade=c.CreateSpriteVisual();shade.Size({300,160});shade.Brush(tint);root.Children().InsertAtTop(shade);
+        tint=c.CreateColorBrush({140,30,30,34});auto shade=c.CreateSpriteVisual();shade.Size({300,160});shade.Brush(tint);root.Children().InsertAtTop(shade);
         textBrush=c.CreateSurfaceBrush();auto text=c.CreateSpriteVisual();text.Size({300,160});text.Brush(textBrush);root.Children().InsertAtTop(text);
         auto geometry=c.CreateRoundedRectangleGeometry();geometry.Size({299.4f,159.4f});geometry.Offset({.3f,.3f});geometry.CornerRadius({29.7f,29.7f});
         border=c.CreateColorBrush({44,255,255,255});auto line=c.CreateSpriteShape(geometry);line.StrokeThickness(.6f);line.StrokeBrush(border);

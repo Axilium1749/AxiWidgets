@@ -129,12 +129,20 @@ internal sealed class DesktopHost
     }
     internal static void RoundGallery(nint hwnd)
     {
-        // Accent composition did not clip cleanly to the custom HRGN. Use the
-        // same compositor-owned contour as the working clock windows.
         Native.SetWindowRgn(hwnd,0,true);
         int round=RoundedCorners,border=0x005D5D62;
         Native.DwmSetWindowAttribute(hwnd,33,ref round,4);
         Native.DwmSetWindowAttribute(hwnd,34,ref border,4);
+    }
+    internal static void GalleryBackdrop(nint hwnd)
+    {
+        SetAccent(hwnd,false,true);
+        int none=1;Native.DwmSetWindowAttribute(hwnd,38,ref none,4);
+        var margins=new Native.Margins();
+        int hr=Native.DwmExtendFrameIntoClientArea(hwnd,ref margins);
+        if(HwndSource.FromHwnd(hwnd)?.CompositionTarget is {} target)target.BackgroundColor=System.Windows.Media.Color.FromRgb(32,32,36);
+        RoundGallery(hwnd);
+        Log.Write($"Gallery opaque background; frame reset=0x{hr:X8}");
     }
     internal static void RoundClock(nint hwnd)
     {

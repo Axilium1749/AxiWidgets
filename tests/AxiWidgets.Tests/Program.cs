@@ -31,7 +31,7 @@ Check("legacy layout keeps instance settings without System Acrylic",()=> {
 Check("tint opacity bounds and invalid values",()=> {
     var a=new AppearanceSettings {TintOpacity=-50};a.Normalize();Equal(0,a.TintOpacity);Equal(0,a.TintAlpha);
     a.TintOpacity=150;a.Normalize();Equal(100,a.TintOpacity);Equal(255,a.TintAlpha);
-    a.TintOpacity=double.NaN;a.Normalize();Equal(15,a.TintOpacity);
+    a.TintOpacity=double.NaN;a.Normalize();Equal(25,a.TintOpacity);
 });
 Check("independent tint color and opacity round trip",()=> {
     var a=System.Text.Json.JsonSerializer.Deserialize<AppearanceSettings>(System.Text.Json.JsonSerializer.Serialize(new AppearanceSettings {Blur=false,TintColor="#804020",TintOpacity=75}))!;

@@ -7,11 +7,11 @@ public sealed class AppearanceSettings
 {
     public bool Blur { get; set; } = true;
     public string TintColor { get; set; } = "#1E1E22";
-    public double TintOpacity { get; set; } = 15;
+    public double TintOpacity { get; set; } = 55;
     public void Normalize()
     {
         Blur=true;
-        TintOpacity=double.IsFinite(TintOpacity)?Math.Clamp(TintOpacity,0,100):15;
+        TintOpacity=double.IsFinite(TintOpacity)?Math.Clamp(TintOpacity,0,100):55;
         TintColor=TryColor(TintColor,out var rgb)?$"#{rgb:X6}":"#1E1E22";
     }
     public static bool TryColor(string? value,out uint rgb)

@@ -32,7 +32,7 @@
             <Setter Property="VerticalAlignment" Value="Top"/>
         </Style>
 </Window.Resources>
-    <Border x:Name="Surface" Background="#CE202024">
+    <Border x:Name="Surface" Background="#202024">
         <Grid Margin="20">
             <Grid.ColumnDefinitions><ColumnDefinition Width="180"/><ColumnDefinition Width="20"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
             <StackPanel>

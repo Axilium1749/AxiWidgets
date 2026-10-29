@@ -2,7 +2,7 @@
 
 Windows 11 desktop clocks with a C# / .NET 10 / WPF manager and C++/WinRT Windows Composition cards. One process, independent clocks, live backdrop blur, magnetic alignment and portable JSON persistence. No Python or browser runtime.
 
-The user confirmed the native Composition prototype works with Wallpaper Engine. Desktop clocks now use that renderer; the existing WPF gallery and menus are retained. The gallery still uses AccentPolicy. See [validation](docs/validation.md) for earlier host checks.
+The user confirmed the native Composition prototype works with Wallpaper Engine. Desktop clocks now use that renderer; the existing WPF gallery and menus are retained. The gallery uses an opaque dark background and system-rounded corners. See [validation](docs/validation.md) for earlier host checks.
 
 ## Build and run
 
@@ -36,7 +36,7 @@ The gallery follows the reference's 1000 × 520 layout, dark translucent surface
 - Drag desktop clocks to snap to edges, centers and neighboring gaps. Threshold/gap: 12 DIP; screen inset: 8 DIP; release radius: 18 DIP.
 - Right-click a desktop clock while editing for **Show seconds**, **Show date**, and **Remove clock**.
 - **Done** hides the gallery, releases mouse capture, removes guides, disables widget input and saves positions.
-- Every clock uses HostBackdropBrush with a native Gaussian blur and a fixed 15% `#1E1E22` tint. A shared 30-DIP Composition clip covers glass, text, and the fine 0.6-DIP outline; pixels outside the rounded card are transparent. The gallery has no appearance controls.
+- Every clock uses HostBackdropBrush with a native Gaussian blur and a fixed 25% `#1E1E22` tint. A shared 30-DIP Composition clip covers glass, text, and the fine 0.6-DIP outline; pixels outside the rounded card are transparent. The gallery has no appearance controls.
 
 Only the gallery is topmost. Desktop clocks remain below ordinary applications. The gallery is reusable, and its preview timer stops while hidden. Exiting the operating-system session or terminating the application still tears it down; Done does not exit the manager.
 
