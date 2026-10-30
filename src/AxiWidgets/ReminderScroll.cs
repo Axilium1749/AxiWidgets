@@ -17,10 +17,10 @@ internal sealed partial class ClockWindow
     private Native.Point rawAbsolute;
     private double accumulatedX,accumulatedY;
     private int renderedBand=int.MinValue;
-    private void ResizeScroll()=>scrollPhysics.Resize(Math.Max(0,manager.Reminders.Items.Count*52-208));
+    private void ResizeScroll()=>scrollPhysics.Resize(Math.Max(0,ListCount*RowHeight-ListHeight));
     private void StartScrollMotion()
     {
-        if(closed||State.Kind!="Reminders"||!scrollPhysics.Moving)return;
+        if(closed||!IsList||!scrollPhysics.Moving)return;
         if(!scrollTimerHooked){scrollTimer.Tick+=ScrollFrame;scrollTimerHooked=true;}
         var model=scrollPhysics.Copy();motionFrames=new(){model.Copy()};
         var positions=new System.Collections.Generic.List<float>{(float)model.Position};
@@ -42,7 +42,7 @@ internal sealed partial class ClockWindow
     private void StopScrollMotion()
     {
         SyncScrollMotion();scrollTimer.Stop();motionFrames=null;scrollPhysics.Cancel();
-        if(!closed&&State.Kind=="Reminders")NativeCard.Check(NativeCard.SetScroll(Handle,(float)scrollPhysics.Position));
+        if(!closed&&IsList)NativeCard.Check(NativeCard.SetScroll(Handle,(float)scrollPhysics.Position));
     }
     private void ScrollFrame(object? sender,EventArgs args)
     {
@@ -52,18 +52,18 @@ internal sealed partial class ClockWindow
     private void PresentScroll(bool applyOffset=true)
     {
         scroll=scrollPhysics.Position;
-        int band=(int)Math.Floor(scroll/52);
+        int band=(int)Math.Floor(scroll/RowHeight);
         if(band!=renderedBand){renderedBand=band;RefreshClock();}
         if(applyOffset)NativeCard.Check(NativeCard.SetScroll(Handle,(float)scroll));
     }
     private void BeginListPointer()
     {
-        if(State.Kind!="Reminders")return;
+        if(!IsList)return;
         var(x,y)=LocalPointer();
-        if(x<16||x>348||y<86||y>308){ReminderClick();return;}
+        if(x<(State.Kind=="SSH"?8:16)||x>348||y<(State.Kind=="SSH"?35:86)||y>(State.Kind=="SSH"?157:308)){ListClick();return;}
         EndInput();StopScrollMotion();ResizeScroll();
         listPressed=true;listDragging=false;pointerX=x;pointerY=y;
-        renderedBand=(int)Math.Floor(scroll/52);
+        renderedBand=(int)Math.Floor(scroll/RowHeight);
         scrollPhysics.Begin(scrollClock.Elapsed.TotalSeconds);Native.SetCapture(Handle);
         if(Native.GetCapture()!=Handle){listPressed=false;scrollPhysics.Cancel();return;}
         accumulatedX=0;accumulatedY=0;rawAbsoluteKnown=false;
@@ -118,7 +118,7 @@ internal sealed partial class ClockWindow
         ReleaseRelativePointer();
         if(Native.GetCapture()==Handle)Native.ReleaseCapture();
         scrollPhysics.Release(scrollClock.Elapsed.TotalSeconds);
-        if(click&&!moved)ReminderClick();
+        if(click&&!moved)ListClick();
         if(!closed&&scrollPhysics.Moving)StartScrollMotion();
     }
     private void SettleScroll()

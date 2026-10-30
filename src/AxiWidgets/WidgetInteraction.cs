@@ -9,14 +9,14 @@ namespace AxiWidgets;
 internal sealed partial class ClockWindow
 {
     internal float WidgetWidth=>State.Kind=="Clock"?300:364;
-    internal float WidgetHeight=>State.Kind=="System"?WidgetDrawing.SystemHeight:State.Kind=="Clock"?160:384;
+    internal float WidgetHeight=>State.Kind is "System" or "SSH"?WidgetDrawing.SystemHeight:State.Kind=="Clock"?160:384;
     private double scroll;
     private System.Windows.Forms.TextBox? input;
     private InputMessages? inputMessages;
     private nint previousForeground;
     private (double X,double Y) LocalPointer(){Native.GetCursorPos(out var p);var r=Native.Bounds(Handle);var scale=r.Width/WidgetWidth;return((p.X-r.X)/scale,(p.Y-r.Y)/scale);}
-    private bool InteractivePoint(){var(x,y)=LocalPointer();return input!=null||x>=16&&x<=348&&((y>=86&&y<=308)||(y>=322&&y<=367));}
-    private void Scroll(short delta){if(Editing||State.Kind!="Reminders")return;if(listPressed)return;EndInput();SyncScrollMotion();ResizeScroll();if(scrollPhysics.Wheel(delta,scrollClock.Elapsed.TotalSeconds))StartScrollMotion();}
+    private bool InteractivePoint(){var(x,y)=LocalPointer();if(State.Kind=="SSH")return x>=8&&x<=356&&y>=6&&y<=157;return input!=null||x>=16&&x<=348&&((y>=86&&y<=308)||(y>=322&&y<=367));}
+    private void Scroll(short delta){if(Editing||!IsList)return;if(listPressed)return;EndInput();SyncScrollMotion();ResizeScroll();if(scrollPhysics.Wheel(delta,scrollClock.Elapsed.TotalSeconds))StartScrollMotion();}
     private void ReminderClick()
     {
         if(State.Kind!="Reminders")return;

@@ -36,6 +36,7 @@ internal sealed partial class ClockWindow
         NativeCard.Check(NativeCard.CreateWidget(out Handle,WidgetWidth,WidgetHeight,State.Kind=="System"?WidgetDrawing.SystemRadius:30));
         if(State.Kind=="Reminders")manager.Reminders.Changed+=ReminderDataChanged;
         if(State.Kind=="System")SystemMonitor.Subscribe(RefreshClock);
+        if(State.Kind=="SSH"){manager.Ssh.Changed+=SshChanged;manager.Ssh.Attach();}
         AcrylicAccepted=true;
         messages=new Messages(this);messages.AssignHandle(Handle);
         var resources=new ResourceDictionary {Source=new Uri("/AxiWidgets;component/WidgetMenu.xaml",UriKind.Relative)};
@@ -50,6 +51,7 @@ internal sealed partial class ClockWindow
     internal void Close()
     {
         if(closed)return;
+        if(State.Kind=="SSH"){manager.Ssh.Changed-=SshChanged;manager.Ssh.Detach();}
         if(State.Kind=="System")SystemMonitor.Unsubscribe(RefreshClock);
         EndListPointer(false);StopScrollMotion();EndInput();manager.Reminders.Changed-=ReminderDataChanged;EndDrag();closed=true;timer.Stop();ContextMenu.IsOpen=false;
         messages.ReleaseHandle();NativeCard.Check(NativeCard.Destroy(Handle));Closed?.Invoke(this,EventArgs.Empty);
@@ -63,7 +65,7 @@ internal sealed partial class ClockWindow
     {
         if(closed)return;
         if(!enabled)ContextMenu.IsOpen=false;
-        EndListPointer(false);if(State.Kind=="Reminders")SettleScroll();EndInput();EndDrag();Editing=enabled;DesktopHost.Input(Handle,enabled||State.Kind=="Reminders");ApplyTheme();
+        EndListPointer(false);if(IsList)SettleScroll();EndInput();EndDrag();Editing=enabled;DesktopHost.Input(Handle,enabled||IsList);ApplyTheme();
     }
     internal void UpdateContextMenu()
     {
@@ -99,8 +101,8 @@ internal sealed partial class ClockWindow
         if(closed)return;
         timer.Stop();var now=DateTime.Now;
         if(State.Kind!="Clock") {
-            if(State.Kind=="Reminders")ResizeScroll();
-            var drawing=State.Kind=="System"?WidgetDrawing.SystemCard(SystemMonitor.Current,SystemMonitor.CpuHistory):State.Kind=="Calendar"?WidgetDrawing.Calendar(now):DrawReminders();
+            if(IsList)ResizeScroll();
+            var drawing=State.Kind=="SSH"?WidgetDrawing.Ssh(manager.Ssh.Store.Items,manager.Ssh.Latency,scroll):State.Kind=="System"?WidgetDrawing.SystemCard(SystemMonitor.Current,SystemMonitor.CpuHistory):State.Kind=="Calendar"?WidgetDrawing.Calendar(now):DrawReminders();
             NativeCard.Check(NativeCard.SetContent(Handle,drawing.Commands.ToArray(),drawing.Commands.Count));
             if(State.Kind=="Calendar"){timer.Interval=new DateTimeOffset(now.Date.AddDays(1))-new DateTimeOffset(now);timer.Start();}return;
         }
@@ -157,7 +159,7 @@ internal sealed partial class ClockWindow
                 case 0xFF:owner.RawListPointer(message.LParam);break;
                 case 0x201:if(owner.Editing)owner.BeginDrag();else owner.BeginListPointer();break;
                 case 0x20A:owner.Scroll(unchecked((short)((long)message.WParam>>16)));message.Result=0;return;
-                case 0x84:if(!owner.Editing&&owner.State.Kind=="Reminders"&&!owner.InteractivePoint()){message.Result=-1;return;}break;
+                case 0x84:if(!owner.Editing&&owner.IsList&&!owner.InteractivePoint()){message.Result=-1;return;}break;
                 case 0x200:owner.MoveListPointer();owner.MoveDrag();break;
                 case 0x202:owner.EndListPointer(true);owner.EndDrag();break;
                 case 0x215:owner.EndListPointer(false);owner.EndDrag();break;

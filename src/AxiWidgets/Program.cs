@@ -70,6 +70,7 @@ internal sealed partial class Manager : IDisposable
     internal AppearanceSettings Appearance { get; private set; }=new();
     private readonly DispatcherTimer appearanceSave=new() { Interval=TimeSpan.FromMilliseconds(350) };
     private string AppearancePath=>Path.Combine(Log.Folder,"appearance.json");
+    internal SshService Ssh {get;private set;}=null!;
     internal ReminderStore Reminders {get;private set;}=null!;
     private string Settings=>Path.Combine(Log.Folder,"layout.json");
     internal Manager(string mode) { this.mode=mode; retry.Tick+=(_,_)=>Recover(); appearanceSave.Tick+=(_,_)=>SaveAppearance(); }
@@ -77,6 +78,7 @@ internal sealed partial class Manager : IDisposable
     {
         var watch=Stopwatch.StartNew();
         Appearance=new AppearanceSettings();
+        Ssh=new SshService();
         Reminders=new ReminderStore(Path.Combine(Log.Folder,"reminders.json"));
         listener=new HwndSource(new HwndSourceParameters("AxiWidgets Shell Listener") { Width=0,Height=0,WindowStyle=unchecked((int)0x80000000),ExtendedWindowStyle=0x80 });
         listener.AddHook(Messages);
@@ -129,7 +131,7 @@ internal sealed partial class Manager : IDisposable
             tray.ShowBalloonTip(4000,"AxiWidgets","Cannot save appearance settings.",Forms.ToolTipIcon.Warning);
         }
     }
-    internal void Smoke()
+    internal async void Smoke()
     {
         try {
             if(windows.Count==0) Add(new ClockState());
@@ -166,7 +168,7 @@ internal sealed partial class Manager : IDisposable
             editing=false;Save();
             var saved=JsonSerializer.Deserialize<List<ClockState>>(File.ReadAllText(Settings))!;
             if(saved.Count!=windows.Count || saved.Select(s=>s.Id).Distinct().Count()!=saved.Count) throw new Exception("Persistence failed");
-            if(windows.Any(w=>w.State.Kind!="Reminders"&&Native.IsWindowEnabled(w.Handle))) throw new Exception("Input remains enabled");
+            if(windows.Any(w=>w.State.Kind is not ("Reminders" or "SSH")&&Native.IsWindowEnabled(w.Handle))) throw new Exception("Input remains enabled");
             OpenGallery();
             var editor=gallery!;
             long ex=(long)Native.GetLong(editor.Handle,-20);
@@ -194,7 +196,7 @@ internal sealed partial class Manager : IDisposable
             encoder.Frames.Add(System.Windows.Media.Imaging.BitmapFrame.Create(bitmap));
             using(var output=File.Create(Path.Combine(Log.Folder,"gallery-layout.png"))) encoder.Save(output);
             editor.DoneButton.RaiseEvent(new RoutedEventArgs(System.Windows.Controls.Button.ClickEvent));
-            if(editor.IsVisible||editor.PreviewTimerRunning||editing||windows.Any(w=>w.State.Kind!="Reminders"&&Native.IsWindowEnabled(w.Handle))) throw new Exception("Done failed to lock widgets or stop preview timer");
+            if(editor.IsVisible||editor.PreviewTimerRunning||editing||windows.Any(w=>w.State.Kind is not ("Reminders" or "SSH")&&Native.IsWindowEnabled(w.Handle))) throw new Exception("Done failed to lock widgets or stop preview timer");
             OpenGallery();
             if(gallery!=editor) throw new Exception("Gallery duplicated on reopen");
             FinishEditing();
@@ -232,6 +234,18 @@ internal sealed partial class Manager : IDisposable
             var systemBitmap=new System.Windows.Media.Imaging.RenderTargetBitmap(728,324,192,192,System.Windows.Media.PixelFormats.Pbgra32);systemBitmap.Render(systemPreview);
             var systemEncoder=new System.Windows.Media.Imaging.PngBitmapEncoder();systemEncoder.Frames.Add(System.Windows.Media.Imaging.BitmapFrame.Create(systemBitmap));
             using(var image=File.Create(Path.Combine(Log.Folder,"system-preview.png")))systemEncoder.Save(image);
+            var savedSsh=Ssh.Store.Items.ToArray();
+            try{
+                Ssh.Store.Save(Enumerable.Range(0,12).Select(i=>new SshConnection{Name="Test server "+i,Host="127.0.0.1",Port=2200+i}));
+                editing=true;editor.SshPreviewButton.RaiseEvent(new RoutedEventArgs(System.Windows.Controls.Button.ClickEvent));
+                var ssh=windows[^1];if(ssh.State.Kind!="SSH")throw new Exception("SSH gallery creation failed");foreach(int sshCount in new[]{1,2,12}){
+                    Ssh.Store.Save(Enumerable.Range(0,sshCount).Select(i=>new SshConnection{Name="Test server "+i,Host="127.0.0.1",Port=2200+i}));ssh.SmokeSshScroll();
+                }
+                var settings=new SshSettingsWindow(Ssh);settings.Show();settings.SmokeRender();settings.Close();
+                RemoveClock(ssh);FinishEditing();
+                Log.Write("SSH SMOKE PASS: gallery creation, list drag/overscroll, fixed HWND, input cleanup, settings render and removal; no SSH session launched.");
+            }finally{Ssh.Store.Save(savedSsh);}
+            await Ssh.SmokeImmediatePing();
             Log.Write("SYSTEM SMOKE PASS: gallery creation, 364x162 DIP, disabled input, drag, removal.");
             Log.Write("WIDGET SMOKE PASS: independent gallery creation; calendar disabled/reminders enabled in normal mode; temporary text editor Enter/Escape; shared task refresh, toggle and persistence; native DPI dimensions; drag/capture/snap path.");
             Log.Write("GALLERY SMOKE PASS: tool/topmost styles, close/move/resize/minimize/maximize suppression, search and timer stop, two preview actions, Done locks input and stops timer, reusable window.");
@@ -317,7 +331,7 @@ internal sealed partial class Manager : IDisposable
         Native.GetCursorPos(out var cursor);
         var display=Display.For(new(cursor.X,cursor.Y,1,1));
         // Prefer a vacant slot above the gallery, then scan the work area.
-        double x=24,y=24;double width=kind=="Clock"?300:364,height=kind=="System"?WidgetDrawing.SystemHeight:kind=="Clock"?160:384;
+        double x=24,y=24;double width=kind=="Clock"?300:364,height=kind is "System" or "SSH"?WidgetDrawing.SystemHeight:kind=="Clock"?160:384;
         var occupied=windows.Select(w=>Native.Bounds(w.Handle)).ToArray();
         bool found=false;
         for(double row=24;row+height<=display.Work.Height/display.Scale-8&&!found;row+=height+12)
@@ -359,6 +373,6 @@ internal sealed partial class Manager : IDisposable
         disposed=true;retry.Stop();appearanceSave.Stop();gallery?.ShutdownGallery();
         Microsoft.Win32.SystemEvents.DisplaySettingsChanged-=DisplaysChanged; Microsoft.Win32.SystemEvents.TimeChanged-=TimeChanged;
         Microsoft.Win32.SystemEvents.UserPreferenceChanged-=PreferencesChanged;Microsoft.Win32.SystemEvents.PowerModeChanged-=PowerChanged;
-        foreach(var w in windows.ToArray())w.Close(); tray.Visible=false;tray.ContextMenuStrip?.Dispose();var icon=tray.Icon;tray.Dispose();icon?.Dispose();listener?.Dispose();NativeCard.Check(NativeCard.Shutdown());
+        foreach(var w in windows.ToArray())w.Close(); Ssh.Dispose();tray.Visible=false;tray.ContextMenuStrip?.Dispose();var icon=tray.Icon;tray.Dispose();icon?.Dispose();listener?.Dispose();NativeCard.Check(NativeCard.Shutdown());
     }
 }

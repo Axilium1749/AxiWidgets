@@ -66,12 +66,15 @@ internal partial class GalleryWindow : Window
     }
     private void SearchChanged(object sender,TextChangedEventArgs e)
     {
-        if(Previews==null||SpecialPreviews==null||SystemPreviewButton==null)return;
+        if(Previews==null||SpecialPreviews==null||SystemPreviewButton==null||SshPreviewButton==null)return;
         string query=Search.Text.Trim();
         bool Match(string text)=>query.Length==0||text.Contains(query,StringComparison.CurrentCultureIgnoreCase);
+        bool ssh=Match("ssh servers terminal сервер подключения");
         bool system=Match("system cpu gpu memory network система процессор память сеть");
         bool clock=Match("clock digital time seconds часы время"),calendar=Match("calendar date календарь дата"),reminders=Match("reminders todo tasks напоминания задачи");
         SearchPlaceholder.Visibility=query.Length==0?Visibility.Visible:Visibility.Collapsed;
+        SshCategory.Visibility=ssh?Visibility.Visible:Visibility.Collapsed;
+        SshPreviewButton.Visibility=ssh&&(category=="SSH"||query.Length>0)?Visibility.Visible:Visibility.Collapsed;
         SystemCategory.Visibility=system?Visibility.Visible:Visibility.Collapsed;
         SystemPreviewButton.Visibility=system&&(category=="System"||query.Length>0)?Visibility.Visible:Visibility.Collapsed;
         ClockCategory.Visibility=clock?Visibility.Visible:Visibility.Collapsed;
@@ -80,19 +83,22 @@ internal partial class GalleryWindow : Window
         Previews.Visibility=clock&&(category=="Clock"||query.Length>0)?Visibility.Visible:Visibility.Collapsed;
         CalendarPreviewButton.Visibility=calendar&&(category=="Calendar"||query.Length>0)?Visibility.Visible:Visibility.Collapsed;
         RemindersPreviewButton.Visibility=reminders&&(category=="Reminders"||query.Length>0)?Visibility.Visible:Visibility.Collapsed;
-        SpecialPreviews.Visibility=SystemPreviewButton.Visibility==Visibility.Visible||CalendarPreviewButton.Visibility==Visibility.Visible||RemindersPreviewButton.Visibility==Visibility.Visible?Visibility.Visible:Visibility.Collapsed;
-        EmptySearch.Visibility=clock||calendar||reminders||system?Visibility.Collapsed:Visibility.Visible;
+        SpecialPreviews.Visibility=SshPreviewButton.Visibility==Visibility.Visible||SystemPreviewButton.Visibility==Visibility.Visible||CalendarPreviewButton.Visibility==Visibility.Visible||RemindersPreviewButton.Visibility==Visibility.Visible?Visibility.Visible:Visibility.Collapsed;
+        EmptySearch.Visibility=clock||calendar||reminders||system||ssh?Visibility.Collapsed:Visibility.Visible;
         RefreshPreview();
     }
     private void SelectCategory(string value){
         category=value;Search.Clear();CategoryHeading.Text=value;
-        CategoryDescription.Text=value=="System"?"CPU, memory, GPU and network. Updated every two seconds.":value=="Clock"?"The time here, simply digital. Add a clock with or without seconds.":value=="Calendar"?"Your month at a glance. Updated automatically every day.":"Your local to-do list. Shared across all Reminders widgets.";
+        CategoryDescription.Text=value=="SSH"?"Your SSH connections. Click a server to open a terminal.":value=="System"?"CPU, memory, GPU and network. Updated every two seconds.":value=="Clock"?"The time here, simply digital. Add a clock with or without seconds.":value=="Calendar"?"Your month at a glance. Updated automatically every day.":"Your local to-do list. Shared across all Reminders widgets.";
+        SshCategory.Background=category=="SSH"?new SolidColorBrush(Color.FromRgb(10,100,214)):Brushes.Transparent;
         SystemCategory.Background=category=="System"?new SolidColorBrush(Color.FromRgb(10,100,214)):Brushes.Transparent;
         ClockCategory.Background=category=="Clock"?new SolidColorBrush(Color.FromRgb(10,100,214)):Brushes.Transparent;
         CalendarCategory.Background=category=="Calendar"?new SolidColorBrush(Color.FromRgb(10,100,214)):Brushes.Transparent;
         RemindersCategory.Background=category=="Reminders"?new SolidColorBrush(Color.FromRgb(10,100,214)):Brushes.Transparent;
         SearchChanged(Search,null!);
     }
+    private void SelectSsh(object sender,RoutedEventArgs e)=>SelectCategory("SSH");
+    private void AddSsh(object sender,RoutedEventArgs e){manager.AddFromGallery(false,"SSH");AddedStatus.Text="SSH added to your desktop";}
     private void SelectSystem(object sender,RoutedEventArgs e)=>SelectCategory("System");
     private void AddSystem(object sender,RoutedEventArgs e){manager.AddFromGallery(false,"System");AddedStatus.Text="System monitor added to your desktop";}
     private void SelectClock(object sender,RoutedEventArgs e)=>SelectCategory("Clock");

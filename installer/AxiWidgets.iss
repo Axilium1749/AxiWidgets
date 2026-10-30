@@ -1,5 +1,5 @@
 ﻿#ifndef AppVersion
-#define AppVersion "0.1.0"
+#define AppVersion "0.2.0"
 #endif
 #ifndef PublishDir
 #define PublishDir "..\artifacts\publish"
@@ -35,7 +35,8 @@ Compression=lzma2
 SolidCompression=yes
 CloseApplications=yes
 RestartApplications=no
-UsePreviousTasks=no
+UsePreviousTasks=yes
+UsePreviousAppDir=yes
 [Languages]
 Name: english; MessagesFile: compiler:Default.isl
 Name: russian; MessagesFile: compiler:Languages\Russian.isl

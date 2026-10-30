@@ -154,5 +154,19 @@ Check("drag reverses immediately without overscroll displacement debt",()=>{
         if(maximum>0&&(side<0?physics.Position<=0:physics.Position>=maximum))throw new Exception("Return waited for old pointer origin");
     }
 });
-Console.WriteLine($"{passed}/34 passed");
-
+Check("SSH import defaults, aliases, includes and deduplication",()=>{
+ string root=Path.Combine(Path.GetTempPath(),"axi-ssh-"+Guid.NewGuid());Directory.CreateDirectory(root);
+ try{
+  File.WriteAllText(Path.Combine(root,"extra"),"Host backup\n HostName backup.example.com\n Port 2222\n");
+  var config=Path.Combine(root,"config");File.WriteAllText(config,"Host prod staging\n HostName example.com\n User admin\n IdentityFile \"~/.ssh/test key\"\nHost *\n Port 22\nInclude extra\nMatch exec something\n HostName forbidden\n");
+  var imported=SshConfig.Import(config);if(imported.Count!=3||imported[0].Host!="example.com"||imported[0].Key!="~/.ssh/test key"||imported[2].Port!=22)throw new Exception("SSH precedence/import failed");
+  var items=new List<SshConnection>();SshStore.Merge(items,imported);int count=items.Count;if(SshStore.Merge(items,imported)!=0||items.Count!=count)throw new Exception("Duplicate import");
+  var store=new SshStore(Path.Combine(root,"connections.json"));store.Save(items.AsEnumerable().Reverse());if(new SshStore(Path.Combine(root,"connections.json")).Items[0].Name!=items[^1].Name)throw new Exception("Order lost");
+ }finally{Directory.Delete(root,true);}
+});
+Check("SSH argument quoting, ports and options",()=>{
+ var c=new SshConnection{Name="test",Host="example.com",User="o'brien",Key="C:/keys/my key",Options="-L 8080:localhost:80 -o \"ServerAliveInterval=30\""};
+ var args=SshConfig.Arguments(c);if(!args.Contains("C:/keys/my key")||!args.Contains("ServerAliveInterval=30")||!SshConfig.PowerShellCommand(c).Contains("'o''brien'"))throw new Exception("Argument quoting failed");
+ c.Port=70000;try{SshConfig.Validate(c);throw new Exception("Invalid port accepted");}catch(FormatException){}
+});
+Console.WriteLine($"{passed}/36 passed");

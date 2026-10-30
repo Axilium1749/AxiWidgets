@@ -7,12 +7,12 @@
 
 **[Download for Windows](https://github.com/Axilium1749/AxiWidgets/releases/latest)** · [Report a bug](https://github.com/Axilium1749/AxiWidgets/issues/new/choose) · [Contributing](CONTRIBUTING.md)
 
-Native glass widgets for the Windows desktop: Clock, Calendar and Reminders.
+Native glass widgets for the Windows desktop: Clock, Calendar, Reminders, System and SSH.
 A C# / .NET 10 / WPF manager hosts C++/WinRT Windows Composition cards in one process.
 
 ## Install
 
-Download `AxiWidgets-Setup-0.1.0-x64.exe` from [Releases](https://github.com/Axilium1749/AxiWidgets/releases/latest) and run it. The installer includes .NET, installs for the current user without elevation, and offers optional autostart. Use the tray icon to open the gallery or exit. The installer is currently unsigned.
+Download `AxiWidgets-Setup-0.2.0-x64.exe` from [Releases](https://github.com/Axilium1749/AxiWidgets/releases/latest) and run it. The installer includes .NET, installs for the current user without elevation, and offers optional autostart. Use the tray icon to open the gallery or exit. The installer is currently unsigned.
 
 ## Requirements
 
@@ -50,28 +50,30 @@ Close an existing instance first; the manager allows only one instance. The inst
 
 ## Installer and autostart
 
-Run `./scripts/Build-Installer.ps1` after bootstrap. It creates `artifacts/installer/AxiWidgets-Setup-0.1.0-x64.exe` with the .NET 10.0.14 runtime included. The first publish downloads pinned runtime packs from NuGet; the Inno Setup compiler is downloaded with a verified SHA-256 and prepared in portable mode under `.tools/inno`. The compiler version/hash is in `installer/compiler.lock.json`.
+Run `./scripts/Build-Installer.ps1` after bootstrap. It creates `artifacts/installer/AxiWidgets-Setup-0.2.0-x64.exe` with the .NET 10.0.14 runtime included. The first publish downloads pinned runtime packs from NuGet; the Inno Setup compiler is downloaded with a verified SHA-256 and prepared in portable mode under `.tools/inno`. The compiler version/hash is in `installer/compiler.lock.json`.
 
-Installation is per user under `%LOCALAPPDATA%\Programs\AxiWidgets`, without administrator rights. The wizard offers a desktop shortcut and autostart, both optional. The Start menu shortcut and Windows uninstall entry are included. Updates ask the running app to save and exit. Uninstall removes the program, shortcuts and its autostart registration, while preserving user data. The current installer is unsigned.
+Installation is per user under `%LOCALAPPDATA%\Programs\AxiWidgets`, without administrator rights. The wizard offers a desktop shortcut and autostart, both optional. The Start menu shortcut and Windows uninstall entry are included. Run the new installer directly over an existing installation; uninstalling first is not required. It keeps the existing installation directory and asks the running app to save and exit. Layout, reminders and SSH connections remain in the separate user data directory. Uninstall removes the program, shortcuts and its autostart registration, while preserving user data. The current installer is unsigned.
 
 Right-click the tray icon and check **Автозапуск** to enable launch on sign-in; uncheck it to disable. This registers the quoted executable path with `--startup` in the current user's Run key. Autostart opens desktop widgets without showing the gallery. No system-wide service or scheduled task is installed.
 
 ## Using widgets
 
 - Left-click the tray icon to open the widget gallery. Right-click for the styled gallery/Exit menu.
-- Choose Clock, Calendar or Reminders. Each preview creates an independent widget.
+- Choose Clock, Calendar, Reminders, System or SSH. Each preview creates an independent widget.
 - Opening the gallery enables layout editing. Drag widgets to snap to display edges, centers and neighboring cards. Right-click a widget for its settings or removal.
 - Done closes the gallery, locks widget positions and saves the layout. The gallery is a fixed topmost tool window; outside clicks and Alt+F4 do not dismiss it. Exit in the tray menu closes the entire application.
 - Clocks offer date and seconds toggles and update at displayed time boundaries.
 - Calendar uses the local Windows calendar, a Monday-first grid, and updates at midnight and time/resume events.
 - Reminders work in normal mode. Tasks are shared across all Reminders instances. Enter adds a task, Escape cancels input, and clicking outside the input strip ends editing. New tasks appear first; completed tasks follow active tasks, with the most recently completed first. Text is limited to 200 characters.
-- Scroll Reminders with the wheel or by dragging the list. Relative mouse input keeps dragging at screen edges while the ordinary cursor remains visible. Elastic scrolling, inertia and row animations stop updating when idle.
+- System shows CPU load/frequency, RAM usage, GPU/VRAM and network rates in Kbit/s or Mbit/s. One shared background collector samples every two seconds and stops when no System cards remain.
+- SSH imports new connections from `~/.ssh/config` on activation, without duplicating existing aliases. Click a server to open Windows Terminal (PowerShell fallback); `+` opens connection settings. Drag settings rows to reorder and Save to apply. Passwords are never stored. An ICMP ping runs every 15 seconds, with an immediate pass after saving changes; hosts blocking ICMP can appear offline even when SSH works. Windows OpenSSH Client is required for connections.
+- Scroll Reminders and SSH with the wheel or by dragging the list. Relative mouse input keeps dragging at screen edges while the ordinary cursor remains visible. Elastic scrolling, inertia and row animations stop updating when idle.
 
-Cards use a live HostBackdropBrush, native Gaussian blur, 55% `#1E1E22` tint, a shared 30-DIP rounded clip and a thin outline. No wallpaper image or screen capture supplies the background. The gallery has an opaque dark background and system-rounded corners. Calendar/Reminders are 364 x 384 DIP (physical pixels at 100% scaling); clocks are 300 x 160 DIP.
+Cards use a live HostBackdropBrush, native Gaussian blur, 55% `#1E1E22` tint, a shared 30-DIP rounded clip and a thin outline. No wallpaper image or screen capture supplies the background. The gallery has an opaque dark background and system-rounded corners. Calendar/Reminders are 364 x 384 DIP (physical pixels at 100% scaling); clocks are 300 x 160 DIP; System/SSH are 364 x 162 DIP.
 
 ## Local data and diagnostics
 
-Data is stored in `%LOCALAPPDATA%\AxiWidgets`: `layout.json`, `appearance.json`, shared `reminders.json` and `diagnostics.log`. Override with `--data=C:\path\to\folder`. These files, build outputs, SDK caches, dumps and local credentials are excluded from Git. On first use, legacy settings/tasks beside the executable in `.local/` are copied without deleting the old data or overwriting existing user data.
+Data is stored in `%LOCALAPPDATA%\AxiWidgets`: `layout.json`, `appearance.json`, shared `reminders.json`, `ssh.json` and `diagnostics.log`. Override with `--data=C:\path\to\folder`. These files, build outputs, SDK caches, dumps and local credentials are excluded from Git. On first use, legacy settings/tasks beside the executable in `.local/` are copied without deleting the old data or overwriting existing user data.
 
 After closing the normal app, run the isolated native smoke harness:
 

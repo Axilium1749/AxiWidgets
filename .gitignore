@@ -39,6 +39,7 @@ coverage/
 layout.json
 appearance.json
 reminders.json
+ssh.json
 *.json.tmp
 .env
 .env.*
