@@ -33,8 +33,9 @@ internal sealed partial class ClockWindow
     internal ClockWindow(Manager manager,ClockState state,string mode)
     {
         this.manager=manager;State=state;this.mode=mode;
-        NativeCard.Check(NativeCard.CreateWidget(out Handle,WidgetWidth,WidgetHeight));
+        NativeCard.Check(NativeCard.CreateWidget(out Handle,WidgetWidth,WidgetHeight,State.Kind=="System"?WidgetDrawing.SystemRadius:30));
         if(State.Kind=="Reminders")manager.Reminders.Changed+=ReminderDataChanged;
+        if(State.Kind=="System")SystemMonitor.Subscribe(RefreshClock);
         AcrylicAccepted=true;
         messages=new Messages(this);messages.AssignHandle(Handle);
         var resources=new ResourceDictionary {Source=new Uri("/AxiWidgets;component/WidgetMenu.xaml",UriKind.Relative)};
@@ -49,6 +50,7 @@ internal sealed partial class ClockWindow
     internal void Close()
     {
         if(closed)return;
+        if(State.Kind=="System")SystemMonitor.Unsubscribe(RefreshClock);
         EndListPointer(false);StopScrollMotion();EndInput();manager.Reminders.Changed-=ReminderDataChanged;EndDrag();closed=true;timer.Stop();ContextMenu.IsOpen=false;
         messages.ReleaseHandle();NativeCard.Check(NativeCard.Destroy(Handle));Closed?.Invoke(this,EventArgs.Empty);
     }
@@ -98,7 +100,7 @@ internal sealed partial class ClockWindow
         timer.Stop();var now=DateTime.Now;
         if(State.Kind!="Clock") {
             if(State.Kind=="Reminders")ResizeScroll();
-            var drawing=State.Kind=="Calendar"?WidgetDrawing.Calendar(now):DrawReminders();
+            var drawing=State.Kind=="System"?WidgetDrawing.SystemCard(SystemMonitor.Current,SystemMonitor.CpuHistory):State.Kind=="Calendar"?WidgetDrawing.Calendar(now):DrawReminders();
             NativeCard.Check(NativeCard.SetContent(Handle,drawing.Commands.ToArray(),drawing.Commands.Count));
             if(State.Kind=="Calendar"){timer.Interval=new DateTimeOffset(now.Date.AddDays(1))-new DateTimeOffset(now);timer.Start();}return;
         }

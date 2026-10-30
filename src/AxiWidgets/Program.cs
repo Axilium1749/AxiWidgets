@@ -219,6 +219,20 @@ internal sealed partial class Manager : IDisposable
                 var bounds=Native.Bounds(widget.Handle);double scale=Display.For(bounds).Scale;
                 if(Math.Abs(bounds.Width-364*scale)>1||Math.Abs(bounds.Height-384*scale)>1)throw new Exception("Widget DPI size failed");
             }
+            editing=true;
+            editor.SystemPreviewButton.RaiseEvent(new RoutedEventArgs(System.Windows.Controls.Button.ClickEvent));
+            var system=windows[^1];
+            if(system.State.Kind!="System")throw new Exception("System gallery creation failed");
+            system.SmokeDrag();system.SetEdit(false);
+            var systemBounds=Native.Bounds(system.Handle);var systemScale=Display.For(systemBounds).Scale;
+            if(Native.IsWindowEnabled(system.Handle)||Math.Abs(systemBounds.Width-364*systemScale)>1||Math.Abs(systemBounds.Height-WidgetDrawing.SystemHeight*systemScale)>1)throw new Exception("System dimensions/input failed");
+            editing=true;RemoveClock(system);FinishEditing();
+            var systemPreview=new WidgetPreview {Kind="System",Width=364,Height=WidgetDrawing.SystemHeight};
+            systemPreview.Measure(new Size(364,WidgetDrawing.SystemHeight));systemPreview.Arrange(new System.Windows.Rect(0,0,364,WidgetDrawing.SystemHeight));systemPreview.UpdateLayout();
+            var systemBitmap=new System.Windows.Media.Imaging.RenderTargetBitmap(728,324,192,192,System.Windows.Media.PixelFormats.Pbgra32);systemBitmap.Render(systemPreview);
+            var systemEncoder=new System.Windows.Media.Imaging.PngBitmapEncoder();systemEncoder.Frames.Add(System.Windows.Media.Imaging.BitmapFrame.Create(systemBitmap));
+            using(var image=File.Create(Path.Combine(Log.Folder,"system-preview.png")))systemEncoder.Save(image);
+            Log.Write("SYSTEM SMOKE PASS: gallery creation, 364x162 DIP, disabled input, drag, removal.");
             Log.Write("WIDGET SMOKE PASS: independent gallery creation; calendar disabled/reminders enabled in normal mode; temporary text editor Enter/Escape; shared task refresh, toggle and persistence; native DPI dimensions; drag/capture/snap path.");
             Log.Write("GALLERY SMOKE PASS: tool/topmost styles, close/move/resize/minimize/maximize suppression, search and timer stop, two preview actions, Done locks input and stops timer, reusable window.");
             Log.Write("SMOKE PASS: native desktop parent, normal/edit input, independent instances, JSON save/read, input disabled on exit edit.");
@@ -303,7 +317,7 @@ internal sealed partial class Manager : IDisposable
         Native.GetCursorPos(out var cursor);
         var display=Display.For(new(cursor.X,cursor.Y,1,1));
         // Prefer a vacant slot above the gallery, then scan the work area.
-        double x=24,y=24;double width=kind=="Clock"?300:364,height=kind=="Clock"?160:384;
+        double x=24,y=24;double width=kind=="Clock"?300:364,height=kind=="System"?WidgetDrawing.SystemHeight:kind=="Clock"?160:384;
         var occupied=windows.Select(w=>Native.Bounds(w.Handle)).ToArray();
         bool found=false;
         for(double row=24;row+height<=display.Work.Height/display.Scale-8&&!found;row+=height+12)

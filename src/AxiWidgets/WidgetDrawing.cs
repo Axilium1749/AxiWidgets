@@ -4,7 +4,7 @@ using System.Globalization;
 using AxiWidgets.Core;
 
 namespace AxiWidgets;
-internal sealed class WidgetDrawing
+internal sealed partial class WidgetDrawing
 {
     internal readonly List<NativeCard.Command> Commands=[];
     const uint White=0xFFFFFFFF,Muted=0xA6FFFFFF,Orange=0xFFFF7835,Yellow=0xFFFFC328;

@@ -17,7 +17,7 @@
     <None Include="../AxiWidgets.Native/bin/AxiWidgets.Native.dll" Link="AxiWidgets.Native.dll" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
   </ItemGroup>
   <Target Name="BuildNativeCard" BeforeTargets="PrepareForBuild"
-          Inputs="../AxiWidgets.Native/CardRenderer.cpp;../AxiWidgets.Native/Build.ps1;../../scripts/toolchain.lock.json"
+          Inputs="../AxiWidgets.Native/SystemMetrics.cpp;../AxiWidgets.Native/CardRenderer.cpp;../AxiWidgets.Native/Build.ps1;../../scripts/toolchain.lock.json"
           Outputs="../AxiWidgets.Native/bin/AxiWidgets.Native.dll">
     <Exec Command="powershell -NoProfile -File &quot;$(MSBuildProjectDirectory)/../AxiWidgets.Native/Build.ps1&quot;" />
   </Target>

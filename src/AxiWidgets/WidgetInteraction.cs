@@ -9,7 +9,7 @@ namespace AxiWidgets;
 internal sealed partial class ClockWindow
 {
     internal float WidgetWidth=>State.Kind=="Clock"?300:364;
-    internal float WidgetHeight=>State.Kind=="Clock"?160:384;
+    internal float WidgetHeight=>State.Kind=="System"?WidgetDrawing.SystemHeight:State.Kind=="Clock"?160:384;
     private double scroll;
     private System.Windows.Forms.TextBox? input;
     private InputMessages? inputMessages;

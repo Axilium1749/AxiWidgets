@@ -20,6 +20,7 @@
 #include <map>
 #include <set>
 #include <chrono>
+#include <cmath>
 #include <algorithm>
 #include <unordered_map>
 
@@ -156,7 +157,7 @@ struct Card
         commands=std::move(background);Draw();if(viewport)listReady=true;
     }
     ~Card(){if(target)target.Root(nullptr);if(hwnd&&IsWindow(hwnd))DestroyWindow(hwnd);}
-    void Create(float w=300,float h=160){
+    void Create(float w=300,float h=160,float radius=30){
         width=w;height=h;
         HINSTANCE module=GetModuleHandle(nullptr);WNDCLASS cls{};cls.hInstance=module;cls.lpfnWndProc=CardProc;cls.lpszClassName=L"AxiWidgets.NativeCard";RegisterClass(&cls);
         hwnd=CreateWindowEx(WS_EX_NOREDIRECTIONBITMAP|WS_EX_NOACTIVATE|WS_EX_TOOLWINDOW,cls.lpszClassName,L"AxiWidgets — Digital Clock",WS_POPUP,0,0,300,160,nullptr,nullptr,module,nullptr);
@@ -167,12 +168,12 @@ struct Card
         auto& r=*renderer;auto c=r.compositor;
         check_hresult(c.as<ABI::Windows::UI::Composition::Desktop::ICompositorDesktopInterop>()->CreateDesktopWindowTarget(hwnd,FALSE,reinterpret_cast<ABI::Windows::UI::Composition::Desktop::IDesktopWindowTarget**>(put_abi(target))));
         root=c.CreateContainerVisual();root.Size({width,height});target.Root(root);
-        auto clip=c.CreateRectangleClip();clip.Left(0);clip.Top(0);clip.Right(width);clip.Bottom(height);clip.TopLeftRadius({30,30});clip.TopRightRadius({30,30});clip.BottomLeftRadius({30,30});clip.BottomRightRadius({30,30});root.Clip(clip);
+        auto clip=c.CreateRectangleClip();clip.Left(0);clip.Top(0);clip.Right(width);clip.Bottom(height);clip.TopLeftRadius({radius,radius});clip.TopRightRadius({radius,radius});clip.BottomLeftRadius({radius,radius});clip.BottomRightRadius({radius,radius});root.Clip(clip);
         auto effect=r.blur.CreateBrush();effect.SetSourceParameter(L"desktop",c.CreateHostBackdropBrush());
         auto glass=c.CreateSpriteVisual();glass.Size({width,height});glass.Brush(effect);root.Children().InsertAtBottom(glass);
         tint=c.CreateColorBrush({140,30,30,34});auto shade=c.CreateSpriteVisual();shade.Size({width,height});shade.Brush(tint);root.Children().InsertAtTop(shade);
         textBrush=c.CreateSurfaceBrush();auto text=c.CreateSpriteVisual();text.Size({width,height});text.Brush(textBrush);root.Children().InsertAtTop(text);
-        auto geometry=c.CreateRoundedRectangleGeometry();geometry.Size({width-.6f,height-.6f});geometry.Offset({.3f,.3f});geometry.CornerRadius({29.7f,29.7f});
+        auto geometry=c.CreateRoundedRectangleGeometry();geometry.Size({width-.6f,height-.6f});geometry.Offset({.3f,.3f});geometry.CornerRadius({radius-.3f,radius-.3f});
         border=c.CreateColorBrush({44,255,255,255});auto line=c.CreateSpriteShape(geometry);line.StrokeThickness(.6f);line.StrokeBrush(border);
         auto outline=c.CreateShapeVisual();outline.Size({width,height});outline.Shapes().Append(line);
         vertical=c.CreateLineGeometry();horizontal=c.CreateLineGeometry();verticalShape=c.CreateSpriteShape(vertical);horizontalShape=c.CreateSpriteShape(horizontal);
@@ -199,11 +200,20 @@ struct Card
                 auto rr=D2D1::RoundedRect(rect,cmd.r,cmd.r);
                 if(cmd.kind==0)context->FillRoundedRectangle(rr,brush.get());
                 else if(cmd.kind==1)context->DrawRoundedRectangle(rr,brush.get(),cmd.size);
+                else if(cmd.kind==9){
+                    constexpr float radians=3.14159265358979323846f/180.f;
+                    float a=cmd.r*radians,b=(cmd.r+cmd.h)*radians;
+                    com_ptr<ID2D1PathGeometry> path;check_hresult(renderer->factory->CreatePathGeometry(path.put()));
+                    com_ptr<ID2D1GeometrySink> sink;check_hresult(path->Open(sink.put()));
+                    sink->BeginFigure({cmd.x+cmd.w*std::cos(a),cmd.y+cmd.w*std::sin(a)},D2D1_FIGURE_BEGIN_HOLLOW);
+                    sink->AddArc(D2D1::ArcSegment({cmd.x+cmd.w*std::cos(b),cmd.y+cmd.w*std::sin(b)},{cmd.w,cmd.w},0,D2D1_SWEEP_DIRECTION_CLOCKWISE,cmd.h>180?D2D1_ARC_SIZE_LARGE:D2D1_ARC_SIZE_SMALL));
+                    sink->EndFigure(D2D1_FIGURE_END_OPEN);check_hresult(sink->Close());context->DrawGeometry(path.get(),brush.get(),cmd.size);
+                }
                 else if(cmd.kind==3)context->DrawLine({cmd.x,cmd.y},{cmd.x+cmd.w,cmd.y+cmd.h},brush.get(),cmd.size);
                 else {
-                    int key=static_cast<int>(cmd.size*10);
+                    int key=static_cast<int>(cmd.size*10)+(cmd.kind==8?10000:0);
                     auto& format=renderer->formats[key];
-                    if(!format){check_hresult(renderer->write->CreateTextFormat(L"Segoe UI",nullptr,DWRITE_FONT_WEIGHT_NORMAL,DWRITE_FONT_STYLE_NORMAL,DWRITE_FONT_STRETCH_NORMAL,cmd.size,L"",format.put()));format->SetParagraphAlignment(DWRITE_PARAGRAPH_ALIGNMENT_CENTER);format->SetWordWrapping(DWRITE_WORD_WRAPPING_NO_WRAP);}
+                    if(!format){check_hresult(renderer->write->CreateTextFormat(L"Segoe UI",nullptr,cmd.kind==8?DWRITE_FONT_WEIGHT_SEMI_BOLD:DWRITE_FONT_WEIGHT_NORMAL,DWRITE_FONT_STYLE_NORMAL,DWRITE_FONT_STRETCH_NORMAL,cmd.size,L"",format.put()));format->SetParagraphAlignment(DWRITE_PARAGRAPH_ALIGNMENT_CENTER);format->SetWordWrapping(DWRITE_WORD_WRAPPING_NO_WRAP);}
                     format->SetTextAlignment(static_cast<DWRITE_TEXT_ALIGNMENT>(cmd.align));
                     context->DrawTextW(cmd.text,static_cast<UINT32>(wcsnlen(cmd.text,256)),format.get(),rect,brush.get(),D2D1_DRAW_TEXT_OPTIONS_CLIP);
                 }
@@ -233,9 +243,9 @@ extern "C" __declspec(dllexport) HRESULT __cdecl AxiCard_Destroy(HWND hwnd) noex
 extern "C" __declspec(dllexport) HRESULT __cdecl AxiCard_Shutdown() noexcept {return Guard([]{cards.clear();renderer.reset();});}
 
 
-extern "C" __declspec(dllexport) HRESULT __cdecl AxiCard_CreateWidget(HWND* result,float width,float height) noexcept {
+extern "C" __declspec(dllexport) HRESULT __cdecl AxiCard_CreateWidget(HWND* result,float width,float height,float radius) noexcept {
     if(!result)return E_POINTER;*result=nullptr;
-    return Guard([&]{if(!renderer)renderer=std::make_unique<Renderer>();auto card=std::make_unique<Card>();card->Create(width,height);*result=card->hwnd;cards.emplace(card->hwnd,std::move(card));});
+    return Guard([&]{if(!renderer)renderer=std::make_unique<Renderer>();auto card=std::make_unique<Card>();card->Create(width,height,radius);*result=card->hwnd;cards.emplace(card->hwnd,std::move(card));});
 }
 extern "C" __declspec(dllexport) HRESULT __cdecl AxiCard_SetContent(HWND hwnd,DrawCommand const* commands,int count) noexcept {
     return Guard([&]{if(count<0||count>1000||(!commands&&count))throw hresult_invalid_argument();auto& card=GetCard(hwnd);card.SetCommands(std::vector<DrawCommand>(commands,commands+count));});
