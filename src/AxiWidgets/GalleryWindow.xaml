@@ -50,6 +50,7 @@
                 </Button>
                 <Button x:Name="CalendarCategory" Style="{StaticResource FlatButton}" Height="47" Margin="0,6,0,0" Content="▦    Calendar" Click="SelectCalendar"/>
                 <Button x:Name="SshCategory" Style="{StaticResource FlatButton}" Height="47" Margin="0,6,0,0" Content="&gt;    SSH" Click="SelectSsh"/>
+                <Button x:Name="MediaCategory" Style="{StaticResource FlatButton}" Height="47" Margin="0,6,0,0" Content="♫    Media Player" Click="SelectMedia"/>
                 <Button x:Name="SystemCategory" Style="{StaticResource FlatButton}" Height="47" Margin="0,6,0,0" Content="▤    System" Click="SelectSystem"/>
                 <Button x:Name="RemindersCategory" Style="{StaticResource FlatButton}" Height="47" Margin="0,6,0,0" Content="☑    Reminders" Click="SelectReminders"/>
             </StackPanel>
@@ -95,6 +96,7 @@
                         </WrapPanel>
                         <WrapPanel x:Name="SpecialPreviews" Visibility="Collapsed" Margin="0,22,0,0">
                             <Button x:Name="SshPreviewButton" Style="{StaticResource PreviewButton}" Click="AddSsh" AutomationProperties.Name="Add SSH"><StackPanel><local:WidgetPreview Kind="SSH" Width="364" Height="162"/><TextBlock Text="+ SSH" HorizontalAlignment="Center" Margin="0,14,0,0"/></StackPanel></Button>
+                            <Button x:Name="MediaPreviewButton" Style="{StaticResource PreviewButton}" Click="AddMedia" AutomationProperties.Name="Add Media"><StackPanel><local:WidgetPreview Kind="Media" Width="364" Height="162"/><TextBlock Text="+ Media" HorizontalAlignment="Center" Margin="0,14,0,0"/></StackPanel></Button>
                             <Button x:Name="SystemPreviewButton" Style="{StaticResource PreviewButton}" Click="AddSystem" AutomationProperties.Name="Add System monitor"><StackPanel><local:WidgetPreview Kind="System" Width="364" Height="162"/><TextBlock Text="+ System monitor" HorizontalAlignment="Center" Margin="0,14,0,0"/></StackPanel></Button>
                             <Button x:Name="CalendarPreviewButton" Style="{StaticResource PreviewButton}" Click="AddCalendar" AutomationProperties.Name="Add Calendar">
                                 <StackPanel><local:WidgetPreview Kind="Calendar" Width="216" Height="228"/><TextBlock Text="+ Calendar" HorizontalAlignment="Center" Margin="0,14,0,0"/></StackPanel>

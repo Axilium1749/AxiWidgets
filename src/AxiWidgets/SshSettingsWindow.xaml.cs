@@ -1,6 +1,8 @@
 using System;
 using System.Collections.ObjectModel;
 using System.Linq;
+using System.Collections.Generic;
+using System.Windows.Media.Animation;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Interop;
@@ -46,11 +48,32 @@ internal partial class SshSettingsWindow : Window {
   }
   ReorderAt(point);e.Handled=true;
  }
+ Dictionary<Guid,double> RowPositions(){
+  var result=new Dictionary<Guid,double>();
+  foreach(var c in items)if(Servers.ItemContainerGenerator.ContainerFromItem(c) is ListBoxItem row)result[c.Id]=row.TranslatePoint(new Point(),Servers).Y;
+  return result;
+ }
+ void AnimateOrder(Dictionary<Guid,double> before){
+  Servers.UpdateLayout();
+  foreach(var c in items)if(Servers.ItemContainerGenerator.ContainerFromItem(c) is ListBoxItem row){
+   var transform=row.RenderTransform as TranslateTransform;
+   double top=row.TranslatePoint(new Point(),Servers).Y-(transform?.Y??0);
+   if(transform==null){transform=new TranslateTransform();row.RenderTransform=transform;}
+   double offset=before.TryGetValue(c.Id,out var old)?old-top:0;
+   transform.BeginAnimation(TranslateTransform.YProperty,null);transform.Y=0;
+   if(Math.Abs(offset)>.1)transform.BeginAnimation(TranslateTransform.YProperty,new DoubleAnimation(offset,0,TimeSpan.FromMilliseconds(190)){EasingFunction=new CubicEase{EasingMode=EasingMode.EaseOut},FillBehavior=FillBehavior.Stop});
+  }
+ }
  void ReorderAt(Point point){
   if(dragged==null)return;
-  if(ItemsControl.ContainerFromElement(Servers,Servers.InputHitTest(point) as DependencyObject) is ListBoxItem row&&row.DataContext is SshConnection target){
-   int from=items.IndexOf(dragged),to=items.IndexOf(target);if(from>=0&&to>=0&&from!=to){Capture();items.Move(from,to);Servers.SelectedItem=dragged;RefreshRows();}
+  // Hit logical slots rather than animated visuals to avoid repeated swaps mid-animation.
+  SshConnection? target=null;
+  foreach(var c in items)if(Servers.ItemContainerGenerator.ContainerFromItem(c) is ListBoxItem row){
+   double top=row.TranslatePoint(new Point(),Servers).Y-(row.RenderTransform is TranslateTransform t?t.Y:0);
+   if(point.Y>=top&&point.Y<top+row.ActualHeight){target=c;break;}
   }
+  if(target==null)return;int from=items.IndexOf(dragged),to=items.IndexOf(target);
+  if(from>=0&&to>=0&&from!=to){var before=RowPositions();Capture();items.Move(from,to);Servers.SelectedItem=dragged;AnimateOrder(before);RefreshRows();}
  }
  static T? Child<T>(DependencyObject parent) where T:DependencyObject {for(int i=0;i<VisualTreeHelper.GetChildrenCount(parent);i++){var c=VisualTreeHelper.GetChild(parent,i);if(c is T result)return result;if(Child<T>(c) is {} found)return found;}return null;}
  void DragTick(){
@@ -71,7 +94,9 @@ internal partial class SshSettingsWindow : Window {
    var first=items[0];Servers.SelectedItem=first;UpdateLayout();
    if(Servers.ItemContainerGenerator.ContainerFromIndex(1) is not ListBoxItem row)throw new InvalidOperationException("SSH row missing");
    dragged=first;dragging=true;
-   var point=row.TranslatePoint(new Point(row.ActualWidth/2,row.ActualHeight/2),Servers);ReorderAt(point);EndListDrag();
+   var point=row.TranslatePoint(new Point(row.ActualWidth/2,row.ActualHeight/2),Servers);ReorderAt(point);
+   if(Servers.ItemContainerGenerator.ContainerFromItem(first) is not ListBoxItem animatedRow||animatedRow.RenderTransform is not TranslateTransform animation||!animation.HasAnimatedProperties)throw new InvalidOperationException("SSH reorder animation missing");
+   EndListDrag();
    if(items[1]!=first||dragTimer.IsEnabled||Servers.IsMouseCaptured)throw new InvalidOperationException("SSH reorder/cleanup failed");
    // Cancelled editing must leave the saved order unchanged.
    if(service.Store.Items[0].Id!=first.Id)throw new InvalidOperationException("Draft order saved prematurely");
@@ -80,6 +105,14 @@ internal partial class SshSettingsWindow : Window {
   var bitmap=new System.Windows.Media.Imaging.RenderTargetBitmap(760,470,96,96,System.Windows.Media.PixelFormats.Pbgra32);UpdateLayout();bitmap.Render(this);
   var encoder=new System.Windows.Media.Imaging.PngBitmapEncoder();encoder.Frames.Add(System.Windows.Media.Imaging.BitmapFrame.Create(bitmap));
   using var file=System.IO.File.Create(System.IO.Path.Combine(Log.Folder,"ssh-settings.png"));encoder.Save(file);
+ }
+ void DragTitle(object sender,MouseButtonEventArgs e){
+  if(e.LeftButton!=MouseButtonState.Pressed)return;
+  for(DependencyObject? node=e.OriginalSource as DependencyObject;node!=null&&node!=sender;){
+   if(node is System.Windows.Controls.Primitives.ButtonBase)return;
+   node=node is Visual?VisualTreeHelper.GetParent(node):LogicalTreeHelper.GetParent(node);
+  }
+  EndListDrag();DragMove();e.Handled=true;
  }
  void Cancel(object sender,RoutedEventArgs e)=>Close();
 }

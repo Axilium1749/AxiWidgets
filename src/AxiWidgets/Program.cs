@@ -52,7 +52,7 @@ internal static class Program
         using var manager=new Manager(mode);
         using var exitSignal=new EventWaitHandle(false,EventResetMode.AutoReset,@"Local\AxiWidgets.Exit");
         var exitWait=ThreadPool.RegisterWaitForSingleObject(exitSignal,(_,_)=>app.Dispatcher.BeginInvoke(()=>manager.ExitApplication()),null,Timeout.Infinite,false);
-        app.Startup+=(_,_)=> { manager.Start(); if(args.Contains("--smoke")) app.Dispatcher.BeginInvoke(()=>manager.Smoke()); else if(args.Contains("--accent-probe")) app.Dispatcher.BeginInvoke(()=>manager.AccentProbe()); else if(args.Contains("--live-probe")) app.Dispatcher.BeginInvoke(async ()=>await manager.LiveProbe()); else if(args.Contains("--gallery")) app.Dispatcher.BeginInvoke(()=>manager.OpenGallery()); };
+        app.Startup+=(_,_)=> { manager.Start(); if(args.Contains("--media-bench")) app.Dispatcher.BeginInvoke(async ()=>await manager.MediaBench()); else if(args.Contains("--media-smoke")) app.Dispatcher.BeginInvoke(async ()=>await manager.MediaSmoke()); else if(args.Contains("--ssh-feedback-smoke")) app.Dispatcher.BeginInvoke(()=>manager.SshFeedbackSmoke()); else if(args.Contains("--smoke")) app.Dispatcher.BeginInvoke(()=>manager.Smoke()); else if(args.Contains("--accent-probe")) app.Dispatcher.BeginInvoke(()=>manager.AccentProbe()); else if(args.Contains("--live-probe")) app.Dispatcher.BeginInvoke(async ()=>await manager.LiveProbe()); };
         try{app.Run();}finally{exitWait.Unregister(null);}
     }
 }
@@ -168,7 +168,7 @@ internal sealed partial class Manager : IDisposable
             editing=false;Save();
             var saved=JsonSerializer.Deserialize<List<ClockState>>(File.ReadAllText(Settings))!;
             if(saved.Count!=windows.Count || saved.Select(s=>s.Id).Distinct().Count()!=saved.Count) throw new Exception("Persistence failed");
-            if(windows.Any(w=>w.State.Kind is not ("Reminders" or "SSH")&&Native.IsWindowEnabled(w.Handle))) throw new Exception("Input remains enabled");
+            if(windows.Any(w=>w.State.Kind is not ("Reminders" or "SSH" or "Media")&&Native.IsWindowEnabled(w.Handle))) throw new Exception("Input remains enabled");
             OpenGallery();
             var editor=gallery!;
             long ex=(long)Native.GetLong(editor.Handle,-20);
@@ -196,7 +196,7 @@ internal sealed partial class Manager : IDisposable
             encoder.Frames.Add(System.Windows.Media.Imaging.BitmapFrame.Create(bitmap));
             using(var output=File.Create(Path.Combine(Log.Folder,"gallery-layout.png"))) encoder.Save(output);
             editor.DoneButton.RaiseEvent(new RoutedEventArgs(System.Windows.Controls.Button.ClickEvent));
-            if(editor.IsVisible||editor.PreviewTimerRunning||editing||windows.Any(w=>w.State.Kind is not ("Reminders" or "SSH")&&Native.IsWindowEnabled(w.Handle))) throw new Exception("Done failed to lock widgets or stop preview timer");
+            if(editor.IsVisible||editor.PreviewTimerRunning||editing||windows.Any(w=>w.State.Kind is not ("Reminders" or "SSH" or "Media")&&Native.IsWindowEnabled(w.Handle))) throw new Exception("Done failed to lock widgets or stop preview timer");
             OpenGallery();
             if(gallery!=editor) throw new Exception("Gallery duplicated on reopen");
             FinishEditing();
@@ -331,7 +331,7 @@ internal sealed partial class Manager : IDisposable
         Native.GetCursorPos(out var cursor);
         var display=Display.For(new(cursor.X,cursor.Y,1,1));
         // Prefer a vacant slot above the gallery, then scan the work area.
-        double x=24,y=24;double width=kind=="Clock"?300:364,height=kind is "System" or "SSH"?WidgetDrawing.SystemHeight:kind=="Clock"?160:384;
+        double x=24,y=24;double width=kind=="Clock"?300:364,height=kind is "System" or "SSH" or "Media"?WidgetDrawing.SystemHeight:kind=="Clock"?160:384;
         var occupied=windows.Select(w=>Native.Bounds(w.Handle)).ToArray();
         bool found=false;
         for(double row=24;row+height<=display.Work.Height/display.Scale-8&&!found;row+=height+12)

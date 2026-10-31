@@ -60,12 +60,17 @@ internal sealed partial class ClockWindow
     {
         if(!IsList)return;
         var(x,y)=LocalPointer();
+        if(State.Kind=="SSH"&&y>=7&&y<35&&x>=322&&x<=352){sshPlusPressed=true;SshPress("+",true);Native.SetCapture(Handle);if(Native.GetCapture()!=Handle){sshPlusPressed=false;SshPress("",false);}return;}
         if(x<(State.Kind=="SSH"?8:16)||x>348||y<(State.Kind=="SSH"?35:86)||y>(State.Kind=="SSH"?157:308)){ListClick();return;}
         EndInput();StopScrollMotion();ResizeScroll();
         listPressed=true;listDragging=false;pointerX=x;pointerY=y;
         renderedBand=(int)Math.Floor(scroll/RowHeight);
         scrollPhysics.Begin(scrollClock.Elapsed.TotalSeconds);Native.SetCapture(Handle);
         if(Native.GetCapture()!=Handle){listPressed=false;scrollPhysics.Cancel();return;}
+        if(State.Kind=="SSH"){
+            int index=(int)Math.Floor((y-35+scroll)/40);
+            if(index>=0&&index<manager.Ssh.Store.Items.Count)SshPress(manager.Ssh.Store.Items[index].Id.ToString(),true);
+        }
         accumulatedX=0;accumulatedY=0;rawAbsoluteKnown=false;
         var device=new Native.RawDevice {Page=1,Usage=2,Flags=0x100,Target=Handle};
         // Keep the regular visible pointer free; raw deltas continue at screen edges.
@@ -76,6 +81,7 @@ internal sealed partial class ClockWindow
     {
         if(!listPressed||relativeInput)return;var(x,y)=LocalPointer();
         if(!listDragging&&Math.Abs(y-pointerY)<5&&Math.Abs(x-pointerX)<5)return;
+        if(!listDragging)SshPress("",false);
         listDragging=true;scrollPhysics.Drag(pointerY-y,scrollClock.Elapsed.TotalSeconds);PresentScroll();
     }
     private void RawListPointer(nint inputHandle)
@@ -97,6 +103,7 @@ internal sealed partial class ClockWindow
         double scale=Native.Bounds(Handle).Width/WidgetWidth;
         accumulatedX+=dx/scale;accumulatedY+=dy/scale;
         if(!listDragging&&Math.Abs(accumulatedX)<5&&Math.Abs(accumulatedY)<5)return;
+        if(!listDragging)SshPress("",false);
         listDragging=true;scrollPhysics.Drag(-accumulatedY,scrollClock.Elapsed.TotalSeconds);PresentScroll();
     }
     private void ReleaseRelativePointer()
@@ -114,10 +121,15 @@ internal sealed partial class ClockWindow
 
     private void EndListPointer(bool click)
     {
-        if(!listPressed)return;bool moved=listDragging;listPressed=false;listDragging=false;
+        if(sshPlusPressed){
+            sshPlusPressed=false;SshPress("",false);SshHover();if(Native.GetCapture()==Handle)Native.ReleaseCapture();
+            var(x,y)=LocalPointer();if(click&&x>=322&&x<=352&&y>=7&&y<35)manager.Ssh.OpenSettings();return;
+        }
+        if(!listPressed)return;SshPress("",false);bool moved=listDragging;listPressed=false;listDragging=false;
         ReleaseRelativePointer();
         if(Native.GetCapture()==Handle)Native.ReleaseCapture();
         scrollPhysics.Release(scrollClock.Elapsed.TotalSeconds);
+        SshHover();
         if(click&&!moved)ListClick();
         if(!closed&&scrollPhysics.Moving)StartScrollMotion();
     }

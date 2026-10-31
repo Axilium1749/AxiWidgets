@@ -1,5 +1,5 @@
 ﻿#ifndef AppVersion
-#define AppVersion "0.2.0"
+#define AppVersion "0.3.0"
 #endif
 #ifndef PublishDir
 #define PublishDir "..\artifacts\publish"
@@ -55,12 +55,12 @@ Source: "{#PublishDir}\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs
 Source: "..\LICENSE"; DestDir: "{app}"; Flags: ignoreversion
 Source: "..\THIRD-PARTY-NOTICES.md"; DestDir: "{app}"; Flags: ignoreversion
 [Icons]
-Name: "{userprograms}\{#ProductName}"; Filename: "{app}\AxiWidgets.exe"; Parameters: "--gallery"; WorkingDir: "{app}"
-Name: "{userdesktop}\{#ProductName}"; Filename: "{app}\AxiWidgets.exe"; Parameters: "--gallery"; WorkingDir: "{app}"; Tasks: desktopicon
+Name: "{userprograms}\{#ProductName}"; Filename: "{app}\AxiWidgets.exe"; WorkingDir: "{app}"
+Name: "{userdesktop}\{#ProductName}"; Filename: "{app}\AxiWidgets.exe"; WorkingDir: "{app}"; Tasks: desktopicon
 [Registry]
 Root: HKCU; Subkey: "Software\Microsoft\Windows\CurrentVersion\Run"; ValueType: string; ValueName: "{#StartupValue}"; ValueData: """{app}\AxiWidgets.exe"" --startup"; Tasks: autostart
 [Run]
-Filename: "{app}\AxiWidgets.exe"; Parameters: "--gallery"; Description: "{cm:Launch}"; Flags: nowait postinstall skipifsilent
+Filename: "{app}\AxiWidgets.exe"; Description: "{cm:Launch}"; Flags: nowait postinstall skipifsilent
 [Code]
 procedure InitializeWizard;
 begin

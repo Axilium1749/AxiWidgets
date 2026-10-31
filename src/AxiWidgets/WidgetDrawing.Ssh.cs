@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using AxiWidgets.Core;
 namespace AxiWidgets;
 internal sealed partial class WidgetDrawing {
@@ -16,17 +17,32 @@ internal sealed partial class WidgetDrawing {
  }
 }
 internal sealed partial class ClockWindow {
+ private bool sshPlusPressed;
+ private string sshHover="";
+ private void SshPress(string id,bool down){if(State.Kind=="SSH"&&!closed){sshHover="";NativeCard.Check(NativeCard.Press(Handle,id,down));}}
+ private void SshHover(bool leave=false){
+  if(State.Kind!="SSH"||closed||listPressed||sshPlusPressed)return;
+  string id="";
+  if(!leave&&!Editing){var(x,y)=LocalPointer();
+   if(x>=322&&x<=352&&y>=7&&y<35)id="+";
+   else if(x>=8&&x<=348&&y>=35&&y<157){int i=(int)Math.Floor((y-35+scroll)/40);if(i>=0&&i<manager.Ssh.Store.Items.Count)id=manager.Ssh.Store.Items[i].Id.ToString();}
+  }
+  if(id==sshHover)return;sshHover=id;NativeCard.Check(NativeCard.Hover(Handle,id,id.Length==0?0:2));
+ }
  private bool IsList=>State.Kind is "Reminders" or "SSH";
  private double RowHeight=>State.Kind=="SSH"?40:52;
  private double ListTop=>State.Kind=="SSH"?35:92;
  private double ListHeight=>State.Kind=="SSH"?122:208;
  private int ListCount=>State.Kind=="SSH"?manager.Ssh.Store.Items.Count:manager.Reminders.Items.Count;
  private void SshChanged(){if(closed)return;ResizeScroll();if(scroll>scrollPhysics.Maximum)SettleScroll();RefreshClock();}
- private void ListClick(){if(State.Kind!="SSH"){ReminderClick();return;}var(x,y)=LocalPointer();if(y<35){if(x>=316)manager.Ssh.OpenSettings();return;}int index=(int)Math.Floor((y-35+scroll)/40);if(y<157&&index>=0&&index<manager.Ssh.Store.Items.Count)SshService.Connect(manager.Ssh.Store.Items[index]);}
+ private void ListClick(){if(State.Kind!="SSH"){ReminderClick();return;}var(x,y)=LocalPointer();if(y<35)return;int index=(int)Math.Floor((y-35+scroll)/40);if(y<157&&index>=0&&index<manager.Ssh.Store.Items.Count)SshService.Connect(manager.Ssh.Store.Items[index]);}
  internal void SmokeSshScroll(){
   var original=Native.Bounds(Handle);var p=Display.For(original);Native.GetCursorPos(out var cursor);
   try{
-   Native.SetCursorPos((int)(original.X+100*p.Scale),(int)(original.Y+70*p.Scale));SetEdit(false);BeginListPointer();
+   SetEdit(false);Native.SetCursorPos((int)(original.X+337*p.Scale),(int)(original.Y+21*p.Scale));BeginListPointer();
+   if(!sshPlusPressed||Native.GetCapture()!=Handle)throw new InvalidOperationException("SSH plus press capture failed");
+   EndListPointer(false);if(sshPlusPressed||Native.GetCapture()==Handle)throw new InvalidOperationException("SSH plus cancellation failed");
+   Native.SetCursorPos((int)(original.X+100*p.Scale),(int)(original.Y+70*p.Scale));BeginListPointer();
    if(!relativeInput)throw new InvalidOperationException("SSH capture failed");
    RelativeListPointer(0,-70*p.Scale);if(!listDragging||scroll<=0||Native.Bounds(Handle)!=original)throw new InvalidOperationException("SSH drag failed");
    EndListPointer(false);StopScrollMotion();
@@ -34,5 +50,23 @@ internal sealed partial class ClockWindow {
    if(scroll>=0)throw new InvalidOperationException("SSH overscroll failed");EndListPointer(false);StopScrollMotion();SettleScroll();
    if(relativeInput||listPressed)throw new InvalidOperationException("SSH pointer cleanup failed");
   }finally{EndListPointer(false);StopScrollMotion();Native.SetCursorPos(cursor.X,cursor.Y);}
+ }
+}
+
+internal sealed partial class Manager {
+ internal void SshFeedbackSmoke(){
+  var saved=Ssh.Store.Items.ToArray();ClockWindow? card=null;
+  try{
+   if(gallery!=null||editing)throw new InvalidOperationException("Startup opened gallery unexpectedly");
+   Ssh.Store.Save(Enumerable.Range(0,3).Select(i=>new SshConnection{Name="Feedback test "+i,Host="127.0.0.1",Port=2200+i}));
+   card=new ClockWindow(this,new ClockState{Kind="SSH"},"desktop");card.Show();
+   NativeCard.Check(NativeCard.Press(card.Handle,Ssh.Store.Items[0].Id.ToString(),true));
+   NativeCard.Check(NativeCard.Press(card.Handle,"",false));
+   NativeCard.Check(NativeCard.Press(card.Handle,"+",true));
+   NativeCard.Check(NativeCard.Press(card.Handle,"",false));
+   var settings=new SshSettingsWindow(Ssh);settings.Show();settings.SmokeRender();settings.Close();
+   Log.Write("SSH FEEDBACK PASS: native row/header press and release; reorder animation active; draft order/capture cleanup verified without cursor movement.");
+  }catch(Exception e){Log.Write("SSH FEEDBACK FAIL: "+e);Environment.ExitCode=1;}
+  finally{card?.Close();Ssh.Store.Save(saved);System.Windows.Application.Current.Shutdown(Environment.ExitCode);}
  }
 }

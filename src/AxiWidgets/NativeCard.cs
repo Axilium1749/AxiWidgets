@@ -5,6 +5,8 @@ namespace AxiWidgets;
 
 internal static class NativeCard
 {
+    [DllImport("AxiWidgets.Native.dll",CallingConvention=CallingConvention.Cdecl,EntryPoint="AxiCard_Press",CharSet=CharSet.Unicode)] internal static extern int Press(nint hwnd,string id,[MarshalAs(UnmanagedType.Bool)]bool down);
+    [DllImport("AxiWidgets.Native.dll",CallingConvention=CallingConvention.Cdecl,EntryPoint="AxiCard_Press",CharSet=CharSet.Unicode)] internal static extern int Hover(nint hwnd,string id,int state);
     private const string Library="AxiWidgets.Native.dll";
     [DllImport(Library,CallingConvention=CallingConvention.Cdecl,EntryPoint="AxiCard_SetScroll")] internal static extern int SetScroll(nint hwnd,float position);
     [DllImport(Library,CallingConvention=CallingConvention.Cdecl,EntryPoint="AxiCard_AnimateScroll")] internal static extern int AnimateScroll(nint hwnd,[In]float[] positions,int count,float interval);
