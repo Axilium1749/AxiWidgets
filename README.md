@@ -12,7 +12,7 @@ A C# / .NET 10 / WPF manager hosts C++/WinRT Windows Composition cards in one pr
 
 ## Install
 
-Download `AxiWidgets-Setup-0.3.0-x64.exe` from [Releases](https://github.com/Axilium1749/AxiWidgets/releases/latest) and run it. The installer includes .NET, installs for the current user without elevation, and offers optional autostart. Use the tray icon to open the gallery or exit. The installer is currently unsigned.
+Download `AxiWidgets-Setup-0.3.1-x64.exe` from [Releases](https://github.com/Axilium1749/AxiWidgets/releases/latest) and run it. The installer includes .NET, installs for the current user without elevation, and offers optional autostart. Use the tray icon to open the gallery or exit. The installer is currently unsigned.
 
 ## Requirements
 
@@ -50,7 +50,7 @@ Close an existing instance first; the manager allows only one instance. The inst
 
 ## Installer and autostart
 
-Run `./scripts/Build-Installer.ps1` after bootstrap. It creates `artifacts/installer/AxiWidgets-Setup-0.3.0-x64.exe` with the .NET 10.0.14 runtime included. The first publish downloads pinned runtime packs from NuGet; the Inno Setup compiler is downloaded with a verified SHA-256 and prepared in portable mode under `.tools/inno`. The compiler version/hash is in `installer/compiler.lock.json`.
+Run `./scripts/Build-Installer.ps1` after bootstrap. It creates `artifacts/installer/AxiWidgets-Setup-0.3.1-x64.exe` with the .NET 10.0.14 runtime included. The first publish downloads pinned runtime packs from NuGet; the Inno Setup compiler is downloaded with a verified SHA-256 and prepared in portable mode under `.tools/inno`. The compiler version/hash is in `installer/compiler.lock.json`.
 
 Installation is per user under `%LOCALAPPDATA%\Programs\AxiWidgets`, without administrator rights. The wizard offers a desktop shortcut and autostart, both optional. The Start menu shortcut and Windows uninstall entry are included. Run the new installer directly over an existing installation; uninstalling first is not required. It keeps the existing installation directory and asks the running app to save and exit. Layout, reminders and SSH connections remain in the separate user data directory. Uninstall removes the program, shortcuts and its autostart registration, while preserving user data. The current installer is unsigned.
 

@@ -15,7 +15,12 @@ struct BandFilter {
  }
 };
 constexpr int BandCount=6;
+// Visual gain only: 50% input reaches the previous full-level sensitivity.
+// Apply before adaptive normalization, so loud tracks keep their dynamic range.
+constexpr double SensitivityGain=2.0;
 constexpr double Centers[BandCount]{60,160,450,1200,3200,8000};
+// Low-frequency RMS is naturally smaller; a common .008 floor hid quiet bass.
+constexpr double BandFloors[BandCount]{.0015,.0025,.008,.008,.008,.008};
 struct FrequencyBand {
  double b0=0,b2=0,a1=0,a2=0,z1=0,z2=0;
  explicit FrequencyBand(double hz=60){double w=6.283185307179586*hz/48000,alpha=std::sin(w)/(2*1.1),a0=1+alpha;b0=alpha/a0;b2=-b0;a1=-2*std::cos(w)/a0;a2=(1-alpha)/a0;}
@@ -63,18 +68,22 @@ void Run(){
  peak=std::max(peak,std::abs(sample));double bass=filters[channel].Process(sample,hp,lp);energy+=bass*bass;for(int band=0;band<BandCount;band++){double y=bank[channel][band].Process(sample);bandEnergy[band]+=y*y;}
  }
  winrt::check_hresult(capture->ReleaseBuffer(frames));
- double bass=frames?std::sqrt(energy/(frames*2.)):0;
+ peak*=SensitivityGain;
+ double bass=frames?std::sqrt(energy/(frames*2.))*SensitivityGain:0;
  double dt=frames/48000.;double follow=1-std::exp(-dt/.45);
  // Bounded adaptive gain keeps quieter tracks responsive without lifting near-silence.
  double gateLevel=std::clamp((peak-.0015)/.006,0.,1.);
+ double lowGate=std::clamp((peak-.00015)/.0015,0.,1.);
  double level=gateLevel*std::clamp(peak/std::max(.035,baselinePeak*1.8),0.,1.);
- double bassLevel=gateLevel*std::clamp(bass/std::max(.015,baselineBass*2.5),0.,1.);
+ double bassLevel=lowGate*std::clamp(bass/std::max(.004,baselineBass*2.0),0.,1.);
  double hit=gateLevel*(std::max(0.,bass-baselineBass*1.25)/std::max(.012,baselineBass*1.5)*.9+std::max(0.,peak-baselinePeak*1.35)/std::max(.025,baselinePeak*1.5)*.6);
  for(int band=0;band<BandCount;band++){
- double rms=frames?std::sqrt(bandEnergy[band]/(frames*2.)):0;
- double normal=rms/std::max(.008,baseline[band]*2.2);
- double onset=std::max(0.,rms-baseline[band]*1.4)/std::max(.008,baseline[band]*1.4);
- float target=static_cast<float>(gateLevel*std::clamp(normal*.65+onset*.7,0.,1.25));
+ double rms=frames?std::sqrt(bandEnergy[band]/(frames*2.))*SensitivityGain:0;
+ bool low=band<2;
+ double normal=rms/std::max(BandFloors[band],baseline[band]*(low?1.8:2.2));
+ double onsetThreshold=low?1.2:1.4;
+ double onset=std::max(0.,rms-baseline[band]*onsetThreshold)/std::max(BandFloors[band],baseline[band]*onsetThreshold);
+ float target=static_cast<float>((low?lowGate:gateLevel)*std::clamp(normal*.65+onset*.7,0.,1.25));
  // Separate attack/release envelopes: short transients survive the 30 Hz visual updates.
  float smoothing=static_cast<float>(1-std::exp(-dt/(target>response[band]?.012:.16)));
  response[band]+=(target-response[band])*smoothing;baseline[band]+=(rms-baseline[band])*(1-std::exp(-dt/.7));
