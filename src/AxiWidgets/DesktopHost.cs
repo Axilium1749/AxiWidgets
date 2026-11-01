@@ -8,6 +8,36 @@ using AxiWidgets.Core;
 
 namespace AxiWidgets;
 
+// The gallery alone uses a transparent WPF control window above native glass.
+// Widgets continue to render entirely in Composition, without layered HWNDs.
+internal sealed class GalleryGlass : IDisposable
+{
+    private nint handle;
+    private double width,height;
+    internal void Sync(nint foreground,double w,double h,double scale,bool visible,byte alpha,uint rgb)
+    {
+        if(!visible){Hide();return;}
+        if(handle==0||Math.Abs(width-w)>.1||Math.Abs(height-h)>.1)
+        {
+            Dispose();
+            NativeCard.Check(NativeCard.CreateWidget(out handle,(float)w,(float)h,30));
+            width=w;height=h;
+            // A nonempty transparent command suppresses the default clock content.
+            NativeCard.Check(NativeCard.SetContent(handle,[new NativeCard.Command {Text=""}],1));
+            Native.EnableWindow(handle,false);
+        }
+        NativeCard.Check(NativeCard.SetDpi(handle,(float)scale));
+        NativeCard.Check(NativeCard.SetStyle(handle,alpha,rgb,false));
+        var bounds=Native.Bounds(foreground);
+        // Insert directly below the topmost WPF controls, without an owner relation
+        // (destroying/recreating glass must never destroy the control window).
+        if(!Native.SetWindowPos(handle,foreground,(int)bounds.X,(int)bounds.Y,(int)bounds.Width,(int)bounds.Height,0x10|0x40))
+            throw new System.ComponentModel.Win32Exception(Marshal.GetLastWin32Error());
+    }
+    internal void Hide(){if(handle!=0)Native.ShowWindow(handle,0);}
+    public void Dispose(){if(handle==0)return;NativeCard.Check(NativeCard.Destroy(handle));handle=0;}
+}
+
 internal static class Native
 {
     internal delegate bool EnumProc(nint hwnd, nint data);
@@ -127,12 +157,12 @@ internal sealed class DesktopHost
         if(((long)Native.GetLong(hwnd,-16)&0x40000000L)!=0) Native.ScreenToClient(parent,ref p);
         Native.SetWindowPos(hwnd,parent!=0?(nint)1:0,p.X,p.Y,(int)Math.Round(bounds.Width),(int)Math.Round(bounds.Height),0x10|0x20);
     }
-    internal static void Input(nint hwnd,bool edit)
+    internal static void Input(nint hwnd)
     {
         long ex=(long)Native.GetLong(hwnd,-20);
         Native.SetLong(hwnd,-20,(nint)(ex|0x08000000|0x80));
-        // Disabled native child HWND passes input to the desktop across process boundaries.
-        Native.EnableWindow(hwnd,edit);
+        // Keep right-click available in normal mode; whole-card movement is gated by Editing.
+        Native.EnableWindow(hwnd,true);
     }
     internal static void ConfigureGallery(nint hwnd)
     {

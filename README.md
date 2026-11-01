@@ -12,7 +12,7 @@ A C# / .NET 10 / WPF manager hosts C++/WinRT Windows Composition cards in one pr
 
 ## Install
 
-Download `AxiWidgets-Setup-0.3.3-x64.exe` from [Releases](https://github.com/Axilium1749/AxiWidgets/releases/latest) and run it. The installer includes .NET, installs for the current user without elevation, and offers optional autostart. Use the tray icon to open the gallery or exit. The installer is currently unsigned.
+Download `AxiWidgets-Setup-0.3.4-x64.exe` from [Releases](https://github.com/Axilium1749/AxiWidgets/releases/latest) and run it. The installer includes .NET, installs for the current user without elevation, and offers optional autostart. Use the tray icon to open the gallery or exit. The installer is currently unsigned.
 
 ## Requirements
 
@@ -50,7 +50,7 @@ Close an existing instance first; the manager allows only one instance. The inst
 
 ## Installer and autostart
 
-Run `./scripts/Build-Installer.ps1` after bootstrap. It creates `artifacts/installer/AxiWidgets-Setup-0.3.3-x64.exe` with the .NET 10.0.14 runtime included. The first publish downloads pinned runtime packs from NuGet; the Inno Setup compiler is downloaded with a verified SHA-256 and prepared in portable mode under `.tools/inno`. The compiler version/hash is in `installer/compiler.lock.json`.
+Run `./scripts/Build-Installer.ps1` after bootstrap. It creates `artifacts/installer/AxiWidgets-Setup-0.3.4-x64.exe` with the .NET 10.0.14 runtime included. The first publish downloads pinned runtime packs from NuGet; the Inno Setup compiler is downloaded with a verified SHA-256 and prepared in portable mode under `.tools/inno`. The compiler version/hash is in `installer/compiler.lock.json`.
 
 Installation is per user under `%LOCALAPPDATA%\Programs\AxiWidgets`, without administrator rights. The wizard offers a desktop shortcut and autostart, both optional. The Start menu shortcut and Windows uninstall entry are included. Run the new installer directly over an existing installation; uninstalling first is not required. It keeps the existing installation directory and asks the running app to save and exit. Layout, reminders and SSH connections remain in the separate user data directory. Uninstall removes the program, shortcuts and its autostart registration, while preserving user data. The current installer is unsigned.
 
@@ -61,16 +61,16 @@ Right-click the tray icon and check **Автозапуск** to enable launch on
 - Launching the application restores desktop widgets and the tray icon without opening the gallery. Left-click the tray icon to open the widget gallery. Right-click for the styled gallery/Exit menu.
 - Choose Clock, Calendar, Reminders, System, SSH or Media Player. Each preview creates an independent widget.
 - Media Player controls the current Windows media session (no account sign-in). Supported buttons and seeking depend on the source app. Its procedural ring uses 30 samples/second, interpolated by Composition; a shared event-driven WASAPI loopback measures volume and six independently normalized frequency bands (60 Hz–8 kHz), without FFT or audio storage. Only visible, playing cards enable it. When the media application can be identified, capture includes only its process tree (all tabs for a browser). Ambiguous/unavailable sources or failed process capture fall back to the default system output; diagnostics record the selected PID and fallback HRESULT. Artwork accents are extracted from a 32×32 thumbnail and cached (32 entries). Paused/hidden cards stop periodic UI updates.
-- Opening the gallery enables layout editing. Drag widgets to snap to display edges, centers and neighboring cards. Right-click a widget for its settings or removal.
-- Done closes the gallery, locks widget positions and saves the layout. The gallery is a fixed topmost tool window; outside clicks and Alt+F4 do not dismiss it. Exit in the tray menu closes the entire application.
+- Opening the gallery enables layout editing. Drag widgets to snap to display edges, centers and neighboring cards. Right-click a widget in either mode for its settings or removal. A second screen-edge snap frame provides a 20-DIP inset on all sides, taking priority over nearby widget alignments.
+- Done closes the gallery, locks widget positions and saves the layout. The gallery is a draggable topmost tool window that resets its position on reopening; outside clicks and Alt+F4 do not dismiss it. Exit in the tray menu closes the entire application.
 - Clocks offer date and seconds toggles and update at displayed time boundaries.
 - Calendar uses the local Windows calendar, a Monday-first grid, and updates at midnight and time/resume events.
 - Reminders work in normal mode. Tasks are shared across all Reminders instances. Enter adds a task, Escape cancels input, and clicking outside the input strip ends editing. New tasks appear first; completed tasks follow active tasks, with the most recently completed first. Text is limited to 200 characters.
-- System shows CPU load/frequency, RAM usage, GPU/VRAM and network rates in Kbit/s or Mbit/s. One shared background collector samples every two seconds and stops when no System cards remain.
+- System shows CPU load/frequency, RAM usage, GPU/VRAM and network rates in Kbit/s or Mbit/s. One shared background collector samples every second with 600 ms gauge transitions and stops when no System cards remain.
 - SSH imports new connections from `~/.ssh/config` on activation, without duplicating existing aliases. Click a server to open Windows Terminal (PowerShell fallback); `+` opens connection settings. Drag settings rows to reorder and Save to apply. Passwords are never stored. An ICMP ping runs every 15 seconds, with an immediate pass after saving changes; hosts blocking ICMP can appear offline even when SSH works. Windows OpenSSH Client is required for connections.
 - Scroll Reminders and SSH with the wheel or by dragging the list. Relative mouse input keeps dragging at screen edges while the ordinary cursor remains visible. Elastic scrolling, inertia and row animations stop updating when idle.
 
-Cards use a live HostBackdropBrush, native Gaussian blur, 55% `#1E1E22` tint, a shared 30-DIP rounded clip and a thin outline. No wallpaper image or screen capture supplies the background. The gallery has an opaque dark background and system-rounded corners. Calendar/Reminders are 364 x 384 DIP (physical pixels at 100% scaling); clocks are 300 x 160 DIP; System/SSH are 364 x 162 DIP.
+Cards use a live HostBackdropBrush, native Gaussian blur, 55% `#1E1E22` tint, a shared 30-DIP rounded clip and a thin outline. No wallpaper image or screen capture supplies the background. The gallery uses native Composition glass beneath transparent WPF controls, with 30-DIP rounded corners. Calendar/Reminders are 364 x 384 DIP (physical pixels at 100% scaling); clocks are 300 x 160 DIP; System/SSH are 364 x 162 DIP.
 
 ## Local data and diagnostics
 

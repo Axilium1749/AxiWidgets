@@ -21,6 +21,19 @@ public sealed class SnapEngine
         x.Add((work.Right - margin - moving.Width, work.Right - margin));
         y.Add((work.Y + margin, work.Y + margin));
         y.Add((work.Bottom - margin - moving.Height, work.Bottom - margin));
+        // A second frame provides a consistent 20 DIP inset on every edge.
+        double inset = 20 * scale;
+        if (moving.Width + 2 * inset <= work.Width)
+        {
+            x.Add((work.X + inset, work.X + inset));
+            x.Add((work.Right - inset - moving.Width, work.Right - inset));
+        }
+        if (moving.Height + 2 * inset <= work.Height)
+        {
+            y.Add((work.Y + inset, work.Y + inset));
+            y.Add((work.Bottom - inset - moving.Height, work.Bottom - inset));
+        }
+        int frameX = x.Count, frameY = y.Count;
         foreach (var n in neighbors)
         {
             x.AddRange([(n.X,n.X),(n.Right-moving.Width,n.Right),
@@ -30,17 +43,23 @@ public sealed class SnapEngine
                 (n.Y+(n.Height-moving.Height)/2,n.Y+n.Height/2),
                 (n.Y-gap-moving.Height,n.Y-gap),(n.Bottom+gap,n.Bottom+gap)]);
         }
-        var sx = Choose(moving.X, x, heldX, 12*scale);
-        var sy = Choose(moving.Y, y, heldY, 12*scale);
+        var sx = Choose(moving.X, x, heldX, 12*scale, frameX);
+        var sy = Choose(moving.Y, y, heldY, 12*scale, frameY);
         heldX = sx?.Position; heldY = sy?.Position;
         var bounds = Clamp(moving with { X = sx?.Position ?? moving.X, Y = sy?.Position ?? moving.Y }, work, margin);
         return new(bounds, bounds.X == sx?.Position ? sx?.Guide : null, bounds.Y == sy?.Position ? sy?.Guide : null);
     }
-    private static (double Position, double Guide)? Choose(double value, List<(double Position,double Guide)> candidates, double? held, double threshold)
+    private static (double Position, double Guide)? Choose(double value, List<(double Position,double Guide)> candidates, double? held, double threshold, int frameCount)
     {
-        // Hysteresis retains a snap until the pointer exceeds a wider release radius.
+        // Keep an existing frame snap stable; a nearby neighbor must not steal it.
         if (held.HasValue && Math.Abs(value-held.Value) <= threshold*1.5)
-            foreach (var c in candidates) if (c.Position == held.Value) return c;
+            foreach (var c in candidates.Take(frameCount)) if (c.Position == held.Value) return c;
+        var frame = candidates.Take(frameCount).Where(c => Math.Abs(c.Position-value) <= threshold)
+            .OrderBy(c => Math.Abs(c.Position-value)).ThenBy(c => c.Position).ToArray();
+        if (frame.Length > 0) return frame[0];
+        // Neighbor alignment retains hysteresis only away from screen-frame targets.
+        if (held.HasValue && Math.Abs(value-held.Value) <= threshold*1.5)
+            foreach (var c in candidates.Skip(frameCount)) if (c.Position == held.Value) return c;
         var eligible = candidates.Where(c => Math.Abs(c.Position-value) <= threshold)
             .OrderBy(c => Math.Abs(c.Position-value)).ThenBy(c => c.Position).ToArray();
         return eligible.Length == 0 ? null : eligible[0];

@@ -52,7 +52,7 @@ internal static class Program
         using var manager=new Manager(mode);
         using var exitSignal=new EventWaitHandle(false,EventResetMode.AutoReset,@"Local\AxiWidgets.Exit");
         var exitWait=ThreadPool.RegisterWaitForSingleObject(exitSignal,(_,_)=>app.Dispatcher.BeginInvoke(()=>manager.ExitApplication()),null,Timeout.Infinite,false);
-        app.Startup+=(_,_)=> { manager.Start(); if(args.Contains("--media-bench")) app.Dispatcher.BeginInvoke(async ()=>await manager.MediaBench()); else if(args.Contains("--media-smoke")) app.Dispatcher.BeginInvoke(async ()=>await manager.MediaSmoke()); else if(args.Contains("--ssh-feedback-smoke")) app.Dispatcher.BeginInvoke(()=>manager.SshFeedbackSmoke()); else if(args.Contains("--smoke")) app.Dispatcher.BeginInvoke(()=>manager.Smoke()); else if(args.Contains("--accent-probe")) app.Dispatcher.BeginInvoke(()=>manager.AccentProbe()); else if(args.Contains("--live-probe")) app.Dispatcher.BeginInvoke(async ()=>await manager.LiveProbe()); };
+        app.Startup+=(_,_)=> { manager.Start(); if(args.Contains("--gallery"))manager.OpenGallery(); if(args.Contains("--media-bench")) app.Dispatcher.BeginInvoke(async ()=>await manager.MediaBench()); else if(args.Contains("--media-smoke")) app.Dispatcher.BeginInvoke(async ()=>await manager.MediaSmoke()); else if(args.Contains("--ssh-feedback-smoke")) app.Dispatcher.BeginInvoke(()=>manager.SshFeedbackSmoke()); else if(args.Contains("--smoke")) app.Dispatcher.BeginInvoke(()=>manager.Smoke()); else if(args.Contains("--accent-probe")) app.Dispatcher.BeginInvoke(()=>manager.AccentProbe()); else if(args.Contains("--live-probe")) app.Dispatcher.BeginInvoke(async ()=>await manager.LiveProbe()); };
         try{app.Run();}finally{exitWait.Unregister(null);}
     }
 }
@@ -140,8 +140,10 @@ internal sealed partial class Manager : IDisposable
             long clockStyle=(long)Native.GetLong(first.Handle,-20);
             if((clockStyle&0x08200080)!=0x08200080||(clockStyle&(8|0x80000))!=0||Native.Class(first.Handle)!="AxiWidgets.NativeCard")
                 throw new Exception("Native clock window styles invalid");
-            if(Native.IsWindowEnabled(first.Handle)) throw new Exception("Normal mode accepts input");
+            if(!Native.IsWindowEnabled(first.Handle)||first.Editing) throw new Exception("Normal mode context input unavailable");
+            first.OpenMenu();if(!first.ContextMenu.IsOpen)throw new Exception("Normal mode context menu failed");first.ContextMenu.IsOpen=false;
             if(!first.AcrylicAccepted) throw new Exception("Native composition unavailable");
+            first.SmokeInsetPlacement();
             editing=true; first.SetEdit(true);
             if(!Native.IsWindowEnabled(first.Handle)) throw new Exception("Edit mode disabled");
             Add(new ClockState { X=380,Y=48 });
@@ -168,7 +170,7 @@ internal sealed partial class Manager : IDisposable
             editing=false;Save();
             var saved=JsonSerializer.Deserialize<List<ClockState>>(File.ReadAllText(Settings))!;
             if(saved.Count!=windows.Count || saved.Select(s=>s.Id).Distinct().Count()!=saved.Count) throw new Exception("Persistence failed");
-            if(windows.Any(w=>w.State.Kind is not ("Reminders" or "SSH" or "Media")&&Native.IsWindowEnabled(w.Handle))) throw new Exception("Input remains enabled");
+            if(windows.Any(w=>w.Editing||!Native.IsWindowEnabled(w.Handle))) throw new Exception("Normal mode input policy failed");
             OpenGallery();
             var editor=gallery!;
             long ex=(long)Native.GetLong(editor.Handle,-20);
@@ -195,10 +197,12 @@ internal sealed partial class Manager : IDisposable
             var encoder=new System.Windows.Media.Imaging.PngBitmapEncoder();
             encoder.Frames.Add(System.Windows.Media.Imaging.BitmapFrame.Create(bitmap));
             using(var output=File.Create(Path.Combine(Log.Folder,"gallery-layout.png"))) encoder.Save(output);
+            Native.SetWindowPos(editor.Handle,0,(int)originalBounds.X+25,(int)originalBounds.Y+20,0,0,1|4|0x10);
             editor.DoneButton.RaiseEvent(new RoutedEventArgs(System.Windows.Controls.Button.ClickEvent));
-            if(editor.IsVisible||editor.PreviewTimerRunning||editing||windows.Any(w=>w.State.Kind is not ("Reminders" or "SSH" or "Media")&&Native.IsWindowEnabled(w.Handle))) throw new Exception("Done failed to lock widgets or stop preview timer");
+            if(editor.IsVisible||editor.PreviewTimerRunning||editing||windows.Any(w=>w.Editing||!Native.IsWindowEnabled(w.Handle))) throw new Exception("Done failed to lock widgets or stop preview timer");
             OpenGallery();
             if(gallery!=editor) throw new Exception("Gallery duplicated on reopen");
+            if(Native.Bounds(editor.Handle)!=originalBounds)throw new Exception("Gallery position was not reset");
             FinishEditing();
             OpenGallery();
             int widgetStart=windows.Count;
@@ -208,7 +212,16 @@ internal sealed partial class Manager : IDisposable
             editor.RemindersPreviewButton.RaiseEvent(new RoutedEventArgs(System.Windows.Controls.Button.ClickEvent));
             if(windows.Count!=widgetStart+3||windows[^1].State.Kind!="Reminders")throw new Exception("Reminders creation failed");
             FinishEditing();
-            if(Native.IsWindowEnabled(windows[widgetStart].Handle)||!Native.IsWindowEnabled(windows[^1].Handle))throw new Exception("Widget normal input policy failed");
+            if(!Native.IsWindowEnabled(windows[widgetStart].Handle)||!Native.IsWindowEnabled(windows[^1].Handle))throw new Exception("Widget normal input policy failed");
+            windows[widgetStart].OpenMenu();
+            if(!windows[widgetStart].ContextMenu.IsOpen||windows[widgetStart].ContextMenu.Items.Count!=1||windows[widgetStart].ContextMenu.Items[0] is not System.Windows.Controls.MenuItem)throw new Exception("Single-action context menu failed");
+            windows[widgetStart].ContextMenu.IsOpen=false;
+            int beforeRemoval=windows.Count;
+            Add(new ClockState {Kind="Calendar"});
+            var removable=windows[^1];removable.SetEdit(false);removable.OpenMenu();
+            ((System.Windows.Controls.MenuItem)removable.ContextMenu.Items[0]).RaiseEvent(new RoutedEventArgs(System.Windows.Controls.MenuItem.ClickEvent));
+            if(windows.Count!=beforeRemoval||Native.IsWindow(removable.Handle))throw new Exception("Normal mode removal failed");
+            Log.Write("CONTEXT/GALLERY PASS: normal-mode menu and removal; no leading separator; gallery position reset on reopen.");
             windows[^1].SmokeReminderInput();
             var created=Reminders.Items[0].Id;
             Reminders.Toggle(created);if(!new ReminderStore(Path.Combine(Log.Folder,"reminders.json")).Items.Single(x=>x.Id==created).Done)throw new Exception("Task state not saved");
@@ -227,7 +240,7 @@ internal sealed partial class Manager : IDisposable
             if(system.State.Kind!="System")throw new Exception("System gallery creation failed");
             system.SmokeDrag();system.SetEdit(false);
             var systemBounds=Native.Bounds(system.Handle);var systemScale=Display.For(systemBounds).Scale;
-            if(Native.IsWindowEnabled(system.Handle)||Math.Abs(systemBounds.Width-364*systemScale)>1||Math.Abs(systemBounds.Height-WidgetDrawing.SystemHeight*systemScale)>1)throw new Exception("System dimensions/input failed");
+            if(!Native.IsWindowEnabled(system.Handle)||Math.Abs(systemBounds.Width-364*systemScale)>1||Math.Abs(systemBounds.Height-WidgetDrawing.SystemHeight*systemScale)>1)throw new Exception("System dimensions/input failed");
             editing=true;RemoveClock(system);FinishEditing();
             var systemPreview=new WidgetPreview {Kind="System",Width=364,Height=WidgetDrawing.SystemHeight};
             systemPreview.Measure(new Size(364,WidgetDrawing.SystemHeight));systemPreview.Arrange(new System.Windows.Rect(0,0,364,WidgetDrawing.SystemHeight));systemPreview.UpdateLayout();
@@ -246,10 +259,10 @@ internal sealed partial class Manager : IDisposable
                 Log.Write("SSH SMOKE PASS: gallery creation, list drag/overscroll, fixed HWND, input cleanup, settings render and removal; no SSH session launched.");
             }finally{Ssh.Store.Save(savedSsh);}
             await Ssh.SmokeImmediatePing();
-            Log.Write("SYSTEM SMOKE PASS: gallery creation, 364x162 DIP, disabled input, drag, removal.");
-            Log.Write("WIDGET SMOKE PASS: independent gallery creation; calendar disabled/reminders enabled in normal mode; temporary text editor Enter/Escape; shared task refresh, toggle and persistence; native DPI dimensions; drag/capture/snap path.");
-            Log.Write("GALLERY SMOKE PASS: tool/topmost styles, close/move/resize/minimize/maximize suppression, search and timer stop, two preview actions, Done locks input and stops timer, reusable window.");
-            Log.Write("SMOKE PASS: native desktop parent, normal/edit input, independent instances, JSON save/read, input disabled on exit edit.");
+            Log.Write("SYSTEM SMOKE PASS: gallery creation, 364x162 DIP, context input, edit drag, removal.");
+            Log.Write("WIDGET SMOKE PASS: normal-mode context menus without leading separator; temporary text editor Enter/Escape; shared task refresh, toggle and persistence; native DPI dimensions; drag/capture/snap path.");
+            Log.Write("GALLERY SMOKE PASS: tool/topmost styles, system command suppression, position reset on reopen, search and timer stop, preview actions, Done locks positions and stops timer, reusable window.");
+            Log.Write("SMOKE PASS: native desktop parent, normal/edit input, independent instances, JSON save/read, positions locked on exit edit.");
             TrayClicked(tray,new Forms.MouseEventArgs(Forms.MouseButtons.Right,1,0,0,0));
             if(trayMenu?.IsOpen!=true||gallery?.IsVisible==true||editing)throw new Exception($"Right tray click did not open menu independently: menu={trayMenu?.IsOpen} gallery={gallery?.IsVisible} editing={editing}");
             ((System.Windows.Controls.MenuItem)trayMenu.Items[0]).RaiseEvent(new RoutedEventArgs(System.Windows.Controls.MenuItem.ClickEvent));
@@ -343,8 +356,8 @@ internal sealed partial class Manager : IDisposable
     }
     internal void RemoveClock(ClockWindow window)
     {
-        if(!editing) return;
-        windows.Remove(window); window.Close(); Save();
+        if(!windows.Remove(window))return;
+        window.Close(); Save();
     }
     private nint Messages(nint hwnd,int msg,nint w,nint l,ref bool handled)
     {

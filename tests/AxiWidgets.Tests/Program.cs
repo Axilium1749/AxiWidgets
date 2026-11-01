@@ -5,8 +5,8 @@ void Check(string name,Action test) { try {test();Console.WriteLine($"PASS {name
 void Equal(double expected,double actual) {if(Math.Abs(expected-actual)>.001)throw new Exception($"expected {expected}, got {actual}");}
 var work=new Rect(0,0,1920,1080);
 SnapResult Snap(Rect r,params Rect[] others)=>new SnapEngine().Snap(r,others,work);
-Check("top left corner",()=> {var r=Snap(new(11,15,300,160)).Bounds;Equal(8,r.X);Equal(8,r.Y);});
-Check("bottom right corner",()=> {var r=Snap(new(1605,906,300,160)).Bounds;Equal(1612,r.X);Equal(912,r.Y);});
+Check("top left corner",()=> {var r=Snap(new(9,10,300,160)).Bounds;Equal(8,r.X);Equal(8,r.Y);});
+Check("bottom right corner",()=> {var r=Snap(new(1610,910,300,160)).Bounds;Equal(1612,r.X);Equal(912,r.Y);});
 Check("nearest edge",()=>Equal(410,Snap(new(407,400,300,160),new Rect(400,700,300,160),new Rect(410,800,300,160)).Bounds.X));
 Check("left gap",()=>Equal(388,Snap(new(390,300,300,160),new Rect(700,300,300,160)).Bounds.X));
 Check("right gap",()=>Equal(1012,Snap(new(1018,300,300,160),new Rect(700,300,300,160)).Bounds.X));
@@ -16,9 +16,29 @@ Check("center X",()=>Equal(750,Snap(new(754,200,300,160),new Rect(700,600,400,16
 Check("center Y",()=>Equal(520,Snap(new(1100,524,300,160),new Rect(700,500,300,200)).Bounds.Y));
 Check("tie stable independent of order",()=> {var a=new Rect(400,800,300,160);var b=new Rect(420,800,300,160);Equal(400,Snap(new(410,300,300,160),a,b).Bounds.X);Equal(400,Snap(new(410,300,300,160),b,a).Bounds.X);});
 Check("outside threshold",()=>Equal(100,Snap(new(100,100,300,160)).Bounds.X));
-Check("hysteresis releases",()=> {var s=new SnapEngine();Equal(8,s.Snap(new(18,100,300,160),[],work).Bounds.X);Equal(8,s.Snap(new(24,100,300,160),[],work).Bounds.X);Equal(30,s.Snap(new(30,100,300,160),[],work).Bounds.X);});
+Check("hysteresis releases",()=> {var s=new SnapEngine();Equal(8,s.Snap(new(11,100,300,160),[],work).Bounds.X);Equal(8,s.Snap(new(24,100,300,160),[],work).Bounds.X);Equal(40,s.Snap(new(40,100,300,160),[],work).Bounds.X);});
 Check("negative origin scaled monitor",()=> {var r=new SnapEngine().Snap(new(-1900,15,450,240),[],new Rect(-1920,0,1920,1080),1.5).Bounds;Equal(-1908,r.X);Equal(12,r.Y);});
 Check("unplug recovery clamp",()=> {var r=SnapEngine.Clamp(new(-2000,2000,300,160),work);Equal(8,r.X);Equal(912,r.Y);});
+Check("inset frame snaps all four corners and reports guides",()=> {
+    foreach(var (x,y,gx,gy) in new[] {(20d,20d,20d,20d),(1600d,20d,1900d,20d),(20d,900d,20d,1060d),(1600d,900d,1900d,1060d)}) {
+        var r=Snap(new(x+3,y-2,300,160));Equal(x,r.Bounds.X);Equal(y,r.Bounds.Y);Equal(gx,r.GuideX??-1);Equal(gy,r.GuideY??-1);
+    }
+});
+Check("inset frame scales on negative-origin monitor",()=> {
+    var r=new SnapEngine().Snap(new(-1872,-1040,450,240),[],new Rect(-1920,-1080,1920,1080),1.5);
+    Equal(-1890,r.Bounds.X);Equal(-1050,r.Bounds.Y);Equal(-1890,r.GuideX??0);Equal(-1050,r.GuideY??0);
+});
+Check("inset frame hysteresis and independent edge axes",()=> {
+    var engine=new SnapEngine();Equal(20,engine.Snap(new(23,200,300,160),[],work).Bounds.X);
+    Equal(20,engine.Snap(new(37,200,300,160),[],work).Bounds.X);
+    var released=engine.Snap(new(41,200,300,160),[],work);Equal(41,released.Bounds.X);
+    if(released.GuideX!=null)throw new Exception("Inset guide retained after release");
+    var mixed=Snap(new(9,23,300,160));Equal(8,mixed.Bounds.X);Equal(20,mixed.Bounds.Y);
+});
+Check("inset frame omitted when widget cannot fit inside it",()=> {
+    var r=new SnapEngine().Snap(new(27,100,1900,160),[],work);Equal(12,r.Bounds.X);
+    if(r.GuideX!=null)throw new Exception("Impossible inset guide shown");
+});
 Check("minute boundary",()=>Equal(29750,ClockSchedule.Next(new DateTime(2026,10,28,12,0,30,250),false).TotalMilliseconds));
 Check("second boundary",()=>Equal(750,ClockSchedule.Next(new DateTime(2026,10,28,12,0,30,250),true).TotalMilliseconds));
 Check("exact boundary sleeps full period",()=>Equal(60000,ClockSchedule.Next(new DateTime(2026,10,28,12,0,0),false).TotalMilliseconds));
@@ -169,4 +189,11 @@ Check("SSH argument quoting, ports and options",()=>{
  var args=SshConfig.Arguments(c);if(!args.Contains("C:/keys/my key")||!args.Contains("ServerAliveInterval=30")||!SshConfig.PowerShellCommand(c).Contains("'o''brien'"))throw new Exception("Argument quoting failed");
  c.Port=70000;try{SshConfig.Validate(c);throw new Exception("Invalid port accepted");}catch(FormatException){}
 });
-Console.WriteLine($"{passed}/36 passed");
+Check("screen inset wins over nearby neighbor alignment",()=> {
+ var neighbor=new Rect(600,27,364,384);
+ var r=Snap(new(29,27,364,384),neighbor);Equal(20,r.Bounds.X);Equal(20,r.Bounds.Y);Equal(20,r.GuideY??-1);
+ // A previously held neighbor alignment must yield to the frame on entry.
+ var engine=new SnapEngine();Equal(27,engine.Snap(new(300,15,364,384),[neighbor],new Rect(0,-1000,1920,2080)).Bounds.Y);
+ r=engine.Snap(new(29,27,364,384),[neighbor],work);Equal(20,r.Bounds.X);Equal(20,r.Bounds.Y);
+});
+Console.WriteLine($"{passed}/41 passed");

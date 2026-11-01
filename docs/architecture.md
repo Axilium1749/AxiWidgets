@@ -11,7 +11,7 @@
 
 Widget windows are non-activating, desktop-owned top-level WS_POPUP windows with WS_EX_NOREDIRECTIONBITMAP and HWND_BOTTOM enforcement. They use HostBackdropBrush through a native Gaussian effect; glass, text and border share a 30-DIP composition clip. The backdrop is live composition, not a captured or cached wallpaper image. Clock rendering does not use WPF transparency, layered HWNDs, custom HRGNs or XAML Islands.
 
-The gallery and context menus use WPF. The gallery has an opaque dark surface, DWM rounding, no taskbar entry, and is deliberately topmost. Desktop widgets are not topmost. Only Done dismisses the gallery during normal use; application shutdown can close it.
+The gallery and context menus use WPF. The gallery uses a transparent WPF control window above a synchronized native Composition glass window with a 30-DIP clip and outline. Both layers hide together; the native layer is disposed on shutdown. The gallery has no taskbar entry and is deliberately topmost; its position resets on reopening. Desktop widgets are not topmost. Only Done dismisses the gallery during normal use; application shutdown can close it.
 
 Normal mode disables Clock/Calendar input. Reminders retain input for task actions and scrolling without enabling widget movement. Explicit text entry uses a temporary clipped native edit control for Windows keyboard/clipboard behavior; visible text stays on the existing composition surface. Edit mode enables whole-widget dragging and snapping. Exit releases capture, unregisters relative input, stops timers and disposes windows and graphics resources.
 

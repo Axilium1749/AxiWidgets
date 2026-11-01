@@ -15,7 +15,6 @@ internal sealed partial class ClockWindow
     private InputMessages? inputMessages;
     private nint previousForeground;
     private (double X,double Y) LocalPointer(){Native.GetCursorPos(out var p);var r=Native.Bounds(Handle);var scale=r.Width/WidgetWidth;return((p.X-r.X)/scale,(p.Y-r.Y)/scale);}
-    private bool InteractivePoint(){var(x,y)=LocalPointer();if(State.Kind=="SSH")return x>=8&&x<=356&&y>=6&&y<=157;return input!=null||x>=16&&x<=348&&((y>=86&&y<=308)||(y>=322&&y<=367));}
     private void Scroll(short delta){if(Editing||!IsList)return;if(listPressed)return;EndInput();SyncScrollMotion();ResizeScroll();if(scrollPhysics.Wheel(delta,scrollClock.Elapsed.TotalSeconds))StartScrollMotion();}
     private void ReminderClick()
     {
@@ -94,6 +93,24 @@ internal sealed partial class ClockWindow
             Native.SetCursorPos((int)before.X+100,(int)before.Y+80);MoveDrag();EndDrag();
             if(Native.Bounds(Handle)==before)throw new InvalidOperationException("Widget did not move");
         } finally {SetEdit(false);Native.SetCursorPos(saved.X,saved.Y);}
+    }
+    internal void SmokeInsetPlacement()
+    {
+        var before=Native.Bounds(Handle);var display=Display.For(before);double scale=display.Scale,inset=20*scale;
+        try {
+            foreach(bool right in new[]{false,true})foreach(bool bottom in new[]{false,true}) {
+                double x=right?display.Work.Right-inset-WidgetWidth*scale:display.Work.X+inset;
+                double y=bottom?display.Work.Bottom-inset-WidgetHeight*scale:display.Work.Y+inset;
+                var neighbor=new AxiWidgets.Core.Rect(x+500*scale,y-3*scale,WidgetWidth*scale,WidgetHeight*scale);
+                var result=new AxiWidgets.Core.SnapEngine().Snap(new(x+2*scale,y-2*scale,WidgetWidth*scale,WidgetHeight*scale),[neighbor],display.Work,scale);
+                DesktopHost.Move(Handle,result.Bounds);
+                var actual=Native.Bounds(Handle);
+                double horizontal=right?display.Work.Right-actual.Right:actual.X-display.Work.X;
+                double vertical=bottom?display.Work.Bottom-actual.Bottom:actual.Y-display.Work.Y;
+                if(Math.Abs(horizontal-inset)>.51||Math.Abs(vertical-inset)>.51)throw new InvalidOperationException($"Actual HWND inset mismatch: {horizontal/scale}, {vertical/scale} DIP");
+            }
+            Log.Write($"INSET PASS: actual HWND edges at 20 DIP on all four corners, DPI scale={scale}; nearby neighbor did not override frame.");
+        } finally {DesktopHost.Move(Handle,before);}
     }
     internal void SmokeReminderActions()
     {

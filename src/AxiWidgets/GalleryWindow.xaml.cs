@@ -4,6 +4,8 @@ using System.Globalization;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Interop;
+using System.Windows.Input;
+using System.Windows.Controls.Primitives;
 using System.Windows.Media;
 using System.Windows.Threading;
 using AxiWidgets.Core;
@@ -15,6 +17,8 @@ internal partial class GalleryWindow : Window
     private readonly Manager manager;
     private readonly DispatcherTimer timer=new();
     private bool allowClose;
+    private bool moving;
+    private readonly GalleryGlass glass=new();
     private string category="Clock";
     internal nint Handle { get; private set; }
     internal bool PreviewTimerRunning => timer.IsEnabled;
@@ -28,23 +32,30 @@ internal partial class GalleryWindow : Window
             HwndSource.FromHwnd(Handle)?.AddHook(Hook);
             ApplyBackdrop(); Place();
         };
-        SizeChanged+=(_,_)=> { if(Handle!=0) DesktopHost.RoundGallery(Handle); };
-        IsVisibleChanged+=(_,_)=> { if(IsVisible) RefreshPreview(); else timer.Stop(); };
+        SizeChanged+=(_,_)=>SyncGlass();
+        LocationChanged+=(_,_)=>SyncGlass();
+        Activated+=(_,_)=>SyncGlass();
+        IsVisibleChanged+=(_,_)=> { if(IsVisible) {SyncGlass();RefreshPreview();} else {glass.Hide();timer.Stop();} };
         timer.Tick+=(_,_)=>RefreshPreview();
         Closing+=PreventClose;
-        Closed+=(_,_)=> {timer.Stop();HwndSource.FromHwnd(Handle)?.RemoveHook(Hook);};
+        Closed+=(_,_)=> {timer.Stop();glass.Dispose();HwndSource.FromHwnd(Handle)?.RemoveHook(Hook);};
     }
     internal void Open()
     {
         if(IsVisible) { Activate(); return; }
         AddedStatus.Text="";
         Show(); Place(); Activate(); Search.Focus();
+        Log.Write($"Gallery opened hwnd={Handle:X} visible={IsVisible}/{Native.IsWindowVisible(Handle)} layered controls with native Composition glass");
     }
     internal void ApplyBackdrop()
     {
-        DesktopHost.GalleryBackdrop(Handle);
-        Surface.Background=new SolidColorBrush(Color.FromRgb(32,32,36));
-        DesktopHost.RoundGallery(Handle);
+        SyncGlass();
+    }
+    private void SyncGlass()
+    {
+        if(Handle==0)return;
+        glass.Sync(Handle,ActualWidth>0?ActualWidth:Width,ActualHeight>0?ActualHeight:Height,
+            VisualTreeHelper.GetDpi(this).DpiScaleX,IsVisible,manager.Appearance.TintAlpha,manager.Appearance.TintRgb);
     }
     internal void Place()
     {
@@ -54,7 +65,7 @@ internal partial class GalleryWindow : Window
         int width=(int)Math.Min(1000*m.Scale,m.Work.Width-32*m.Scale);
         int height=(int)Math.Min(520*m.Scale,m.Work.Height-48*m.Scale);
         Native.SetWindowPos(Handle,-1,(int)(m.Work.X+(m.Work.Width-width)/2),(int)(m.Work.Bottom-height-40*m.Scale),width,height,0x10);
-        DesktopHost.RoundGallery(Handle);
+        SyncGlass();
     }
     private void RefreshPreview()
     {
@@ -92,13 +103,13 @@ internal partial class GalleryWindow : Window
     }
     private void SelectCategory(string value){
         category=value;Search.Clear();CategoryHeading.Text=value;
-        CategoryDescription.Text=value=="Media"?"Your system media player. Live controls and artwork-inspired colors.":value=="SSH"?"Your SSH connections. Click a server to open a terminal.":value=="System"?"CPU, memory, GPU and network. Updated every two seconds.":value=="Clock"?"The time here, simply digital. Add a clock with or without seconds.":value=="Calendar"?"Your month at a glance. Updated automatically every day.":"Your local to-do list. Shared across all Reminders widgets.";
-        MediaCategory.Background=category=="Media"?new SolidColorBrush(Color.FromRgb(10,100,214)):Brushes.Transparent;
-        SshCategory.Background=category=="SSH"?new SolidColorBrush(Color.FromRgb(10,100,214)):Brushes.Transparent;
-        SystemCategory.Background=category=="System"?new SolidColorBrush(Color.FromRgb(10,100,214)):Brushes.Transparent;
-        ClockCategory.Background=category=="Clock"?new SolidColorBrush(Color.FromRgb(10,100,214)):Brushes.Transparent;
-        CalendarCategory.Background=category=="Calendar"?new SolidColorBrush(Color.FromRgb(10,100,214)):Brushes.Transparent;
-        RemindersCategory.Background=category=="Reminders"?new SolidColorBrush(Color.FromRgb(10,100,214)):Brushes.Transparent;
+        CategoryDescription.Text=value=="Media"?"Your system media player. Live controls and artwork-inspired colors.":value=="SSH"?"Your SSH connections. Click a server to open a terminal.":value=="System"?"CPU, memory, GPU and network. Updated every second.":value=="Clock"?"The time here, simply digital. Add a clock with or without seconds.":value=="Calendar"?"Your month at a glance. Updated automatically every day.":"Your local to-do list. Shared across all Reminders widgets.";
+        MediaCategory.Background=category=="Media"?(Brush)FindResource("GalleryAccent"):Brushes.Transparent;
+        SshCategory.Background=category=="SSH"?(Brush)FindResource("GalleryAccent"):Brushes.Transparent;
+        SystemCategory.Background=category=="System"?(Brush)FindResource("GalleryAccent"):Brushes.Transparent;
+        ClockCategory.Background=category=="Clock"?(Brush)FindResource("GalleryAccent"):Brushes.Transparent;
+        CalendarCategory.Background=category=="Calendar"?(Brush)FindResource("GalleryAccent"):Brushes.Transparent;
+        RemindersCategory.Background=category=="Reminders"?(Brush)FindResource("GalleryAccent"):Brushes.Transparent;
         SearchChanged(Search,null!);
     }
     private void SelectMedia(object sender,RoutedEventArgs e)=>SelectCategory("Media");
@@ -118,11 +129,23 @@ internal partial class GalleryWindow : Window
     internal void Dismiss() { Hide(); timer.Stop(); }
     internal void ShutdownGallery() { allowClose=true; Close(); }
     private void PreventClose(object? sender,CancelEventArgs e) { e.Cancel=!allowClose; }
+    private void DragSurface(object sender,MouseButtonEventArgs e)
+    {
+        if(e.LeftButton!=MouseButtonState.Pressed)return;
+        for(DependencyObject? node=e.OriginalSource as DependencyObject;node!=null&&node!=Surface;)
+        {
+            if(node is ButtonBase or TextBoxBase or ScrollBar)return;
+            node=node is Visual?VisualTreeHelper.GetParent(node):LogicalTreeHelper.GetParent(node);
+        }
+        moving=true;
+        try { DragMove();e.Handled=true; }
+        finally { moving=false; }
+    }
     private nint Hook(nint hwnd,int msg,nint w,nint l,ref bool handled)
     {
-        // No Alt+F4, system-menu move/resize/minimize, Escape or outside-click dismissal.
-        if(!allowClose && msg==0x112 && ((long)w&0xfff0) is 0xf060 or 0xf010 or 0xf000 or 0xf020 or 0xf030) {handled=true;return 0;}
-        if(msg==0x2e0) Dispatcher.BeginInvoke(()=>Place());
+        // Only an explicit surface drag may start a move; Done still dismisses the gallery.
+        if(!allowClose && msg==0x112 && (((long)w&0xfff0) is 0xf060 or 0xf000 or 0xf020 or 0xf030 || ((long)w&0xfff0)==0xf010&&!moving)) {handled=true;return 0;}
+        if(msg==0x2e0) Dispatcher.BeginInvoke(SyncGlass);
         return 0;
     }
 }

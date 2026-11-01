@@ -67,7 +67,7 @@ internal sealed partial class ClockWindow
     {
         if(closed)return;
         if(!enabled)ContextMenu.IsOpen=false;
-        EndListPointer(false);if(IsList)SettleScroll();EndInput();EndDrag();Editing=enabled;DesktopHost.Input(Handle,enabled||IsList||State.Kind=="Media");ApplyTheme();
+        EndListPointer(false);if(IsList)SettleScroll();EndInput();EndDrag();Editing=enabled;DesktopHost.Input(Handle);ApplyTheme();
     }
     internal void UpdateContextMenu()
     {
@@ -80,13 +80,13 @@ internal sealed partial class ClockWindow
         Toggle("Show seconds",State.Seconds,()=>State.Seconds=!State.Seconds);
         Toggle("Show date",State.Date,()=>State.Date=!State.Date);
         }
-        ContextMenu.Items.Add(new Separator {Style=(Style)ContextMenu.FindResource("WidgetMenuSeparator")});
+        if(ContextMenu.Items.Count>0)ContextMenu.Items.Add(new Separator {Style=(Style)ContextMenu.FindResource("WidgetMenuSeparator")});
         var remove=new MenuItem {Header="Remove "+State.Kind.ToLowerInvariant(),Tag="Remove"};remove.Click+=(_,_)=>manager.RemoveClock(this);ContextMenu.Items.Add(remove);
     }
     internal void OpenMenu()
     {
-        if(!Editing||closed)return;
-        EndDrag();UpdateContextMenu();Native.GetCursorPos(out var cursor);
+        if(closed)return;
+        EndListPointer(false);EndInput();EndDrag();UpdateContextMenu();Native.GetCursorPos(out var cursor);
         var display=Display.For(new(cursor.X,cursor.Y,1,1));
         ContextMenu.Placement=PlacementMode.AbsolutePoint;
         ContextMenu.HorizontalOffset=cursor.X/display.Scale;ContextMenu.VerticalOffset=cursor.Y/display.Scale;
@@ -163,7 +163,6 @@ internal sealed partial class ClockWindow
                 case 0xFF:owner.RawListPointer(message.LParam);break;
                 case 0x201:if(owner.Editing)owner.BeginDrag();else if(owner.State.Kind=="Media")owner.MediaDown();else owner.BeginListPointer();break;
                 case 0x20A:owner.Scroll(unchecked((short)((long)message.WParam>>16)));message.Result=0;return;
-                case 0x84:if(!owner.Editing&&owner.IsList&&!owner.InteractivePoint()){message.Result=-1;return;}break;
                 case 0x2A3:owner.MediaMove(true);owner.SshHover(true);break;
                 case 0x200:owner.MediaMove();owner.SshHover();owner.MoveListPointer();owner.MoveDrag();break;
                 case 0x202:owner.MediaUp(true);owner.EndListPointer(true);owner.EndDrag();break;
