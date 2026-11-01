@@ -8,10 +8,10 @@ namespace AxiWidgets;
 internal struct MediaState {
  [MarshalAs(UnmanagedType.ByValTStr,SizeConst=256)]public string Title;
  [MarshalAs(UnmanagedType.ByValTStr,SizeConst=256)]public string Artist;
- public double Position,Duration,Rate;public int Playing,Available,Controls;public uint Color;public int Error;
+ public double Position,Duration,Rate;public int Playing,Available,Controls;public uint Color;public int Error;public uint Process;
 }
 [StructLayout(LayoutKind.Sequential)]
-internal struct AudioLevels {public float Level,Bass,Hit;public int Error;public ulong Packets;}
+internal struct AudioLevels {public float Level,Bass,Hit;public int Error;public ulong Packets;public uint Process;public int Fallback;}
 internal static class MediaNative {
  [DllImport("AxiWidgets.Native.dll",EntryPoint="AxiMedia_AudioSelfTest",CallingConvention=CallingConvention.Cdecl)]internal static extern int AudioSelfTest();
  [DllImport("AxiWidgets.Native.dll",EntryPoint="AxiMedia_AudioPulse",CallingConvention=CallingConvention.Cdecl)]internal static extern int AudioPulse(nint hwnd,out AudioLevels levels);
@@ -58,12 +58,12 @@ internal sealed partial class WidgetDrawing {
 internal sealed partial class ClockWindow {
  private uint mediaPaletteSeed=(uint)Random.Shared.Next(1,int.MaxValue);private bool mediaProgressReset=true;
  private MediaState media;private string mediaContentKey="";private bool mediaWasVisible;
- private int mediaAudioError;private readonly DispatcherTimer mediaAudioTick=new(){Interval=TimeSpan.FromMilliseconds(1000.0/30)};
+ private uint mediaAudioProcess=uint.MaxValue;private int mediaAudioError;private readonly DispatcherTimer mediaAudioTick=new(){Interval=TimeSpan.FromMilliseconds(1000.0/30)};
  private readonly DispatcherTimer mediaTick=new(){Interval=TimeSpan.FromSeconds(1)};
  private readonly DispatcherTimer mediaTransition=new(){Interval=TimeSpan.FromMilliseconds(310)};
  private long mediaStamp;private int mediaHover=-1,mediaPressed=-1;private bool mediaSeeking;private double mediaSeek;
  private double MediaPosition=>mediaSeeking?mediaSeek:Math.Clamp(media.Position+(media.Playing!=0?Stopwatch.GetElapsedTime(mediaStamp).TotalSeconds*media.Rate:0),0,Math.Max(0,media.Duration));
- private void MediaInit(){mediaAudioTick.Tick+=(_,_)=>{if(closed)return;NativeCard.Check(MediaNative.AudioPulse(Handle,out var levels));if(levels.Error<0&&levels.Error!=mediaAudioError)Log.Write($"Media audio HRESULT=0x{levels.Error:X8}");mediaAudioError=levels.Error;};mediaTick.Tick+=(_,_)=>MediaDraw();mediaTransition.Tick+=(_,_)=>{mediaTransition.Stop();MediaVisual();};NativeCard.Check(MediaNative.Attach(Handle,true));}
+ private void MediaInit(){mediaAudioTick.Tick+=(_,_)=>{if(closed)return;NativeCard.Check(MediaNative.AudioPulse(Handle,out var levels));if(levels.Error<0&&levels.Error!=mediaAudioError)Log.Write($"Media audio HRESULT=0x{levels.Error:X8}");if(mediaAudioProcess!=levels.Process){mediaAudioProcess=levels.Process;Log.Write($"Media audio source: {(levels.Process==0?"system fallback":"process "+levels.Process)}; fallback HRESULT=0x{levels.Fallback:X8}");}mediaAudioError=levels.Error;};mediaTick.Tick+=(_,_)=>MediaDraw();mediaTransition.Tick+=(_,_)=>{mediaTransition.Stop();MediaVisual();};NativeCard.Check(MediaNative.Attach(Handle,true));}
  private void MediaClose(){mediaTick.Stop();mediaTransition.Stop();MediaUp(false);mediaAudioTick.Stop();NativeCard.Check(MediaNative.Attach(Handle,false));}
  private void MediaRefresh(){if(State.Kind!="Media"||closed)return;var old=media;NativeCard.Check(MediaNative.Read(out media));mediaStamp=Stopwatch.GetTimestamp();if(media.Error<0&&media.Error!=old.Error)Log.Write($"Media session HRESULT=0x{media.Error:X8}");
  bool changed=old.Title!=media.Title||old.Artist!=media.Artist;
@@ -107,7 +107,7 @@ internal sealed partial class Manager {
  for(int i=0;i<5;i++){NativeCard.Check(MediaNative.Visual(card.Handle,true,0xff55ddc7,i,0));NativeCard.Check(MediaNative.Visual(card.Handle,true,0xff55ddc7,i,1));}
  await System.Threading.Tasks.Task.Delay(800);
  NativeCard.Check(MediaNative.AudioPulse(card.Handle,out var audio));
- Log.Write($"MEDIA AUDIO: packets={audio.Packets}, level={audio.Level:F3}, bass={audio.Bass:F3}, hit={audio.Hit:F3}, HRESULT=0x{audio.Error:X8}");
+ Log.Write($"MEDIA AUDIO: packets={audio.Packets}, level={audio.Level:F3}, bass={audio.Bass:F3}, hit={audio.Hit:F3}, HRESULT=0x{audio.Error:X8}, process={audio.Process}, fallback=0x{audio.Fallback:X8}");
  if(audio.Error<0)throw new InvalidOperationException($"Audio capture failed: 0x{audio.Error:X8}");
  NativeCard.Check(MediaNative.Visual(card.Handle,false,0xffff8855,-1,0));await System.Threading.Tasks.Task.Delay(500);
  Native.ShowWindow(card.Handle,0);await System.Threading.Tasks.Task.Delay(100);

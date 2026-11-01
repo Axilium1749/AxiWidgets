@@ -7,6 +7,52 @@
 #include <set>
 
 namespace AudioReactive {
+// Resolve only exact application IDs / executable names; ambiguous roots use system fallback.
+DWORD ResolveSource(std::wstring id){
+ std::transform(id.begin(),id.end(),id.begin(),[](wchar_t c){return static_cast<wchar_t>(towlower(c));});
+ std::wstring executable=id;
+ if(id==L"chrome"||id.starts_with(L"chrome."))executable=L"chrome.exe";
+ else if(id==L"msedge"||id.starts_with(L"msedge."))executable=L"msedge.exe";
+ else if(id==L"firefox")executable=L"firefox.exe";
+ else if(id==L"spotify")executable=L"spotify.exe";
+ winrt::handle processes{CreateToolhelp32Snapshot(TH32CS_SNAPPROCESS,0)};if(!processes||processes.get()==INVALID_HANDLE_VALUE)return 0;
+ std::map<DWORD,DWORD> matches;PROCESSENTRY32W entry{sizeof(entry)};
+ if(Process32FirstW(processes.get(),&entry))do{
+  bool match=_wcsicmp(entry.szExeFile,executable.c_str())==0;
+  if(!match){winrt::handle process{OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION,FALSE,entry.th32ProcessID)};if(process){UINT32 count=0;if(GetApplicationUserModelId(process.get(),&count,nullptr)==ERROR_INSUFFICIENT_BUFFER&&count<4096){std::vector<wchar_t> appid(count);if(GetApplicationUserModelId(process.get(),&count,appid.data())==ERROR_SUCCESS)match=_wcsicmp(appid.data(),id.c_str())==0;}}}
+  if(match)matches[entry.th32ProcessID]=entry.th32ParentProcessID;
+ }while(Process32NextW(processes.get(),&entry));
+ // Desktop apps may publish a custom AUMID unrelated to their executable (e.g. browser profiles).
+ if(matches.empty()){
+  struct Search {std::wstring const* id;std::set<DWORD> found;};Search search{&id,{}};
+  EnumWindows([](HWND window,LPARAM data)->BOOL{
+   auto& search=*reinterpret_cast<Search*>(data);winrt::com_ptr<IPropertyStore> store;
+   if(SUCCEEDED(SHGetPropertyStoreForWindow(window,__uuidof(IPropertyStore),store.put_void()))){
+    PROPVARIANT value{};if(SUCCEEDED(store->GetValue(PKEY_AppUserModel_ID,&value))&&value.vt==VT_LPWSTR&&value.pwszVal&&_wcsicmp(value.pwszVal,search.id->c_str())==0){DWORD pid=0;GetWindowThreadProcessId(window,&pid);if(pid)search.found.insert(pid);}PropVariantClear(&value);
+   }
+   return TRUE;
+  },reinterpret_cast<LPARAM>(&search));
+  if(search.found.size()==1)return *search.found.begin();
+ }
+ DWORD root=0;for(auto const& [pid,parent]:matches)if(!matches.contains(parent)){if(root)return 0;root=pid;}return root;
+}
+struct Activation:winrt::implements<Activation,IActivateAudioInterfaceCompletionHandler>{
+ winrt::handle ready{CreateEvent(nullptr,TRUE,FALSE,nullptr)};HRESULT result=E_PENDING;winrt::com_ptr<IAudioClient> client;
+ HRESULT __stdcall ActivateCompleted(IActivateAudioInterfaceAsyncOperation* operation) noexcept override {
+  winrt::com_ptr<::IUnknown> unknown;HRESULT activation=E_FAIL;result=operation->GetActivateResult(&activation,unknown.put());
+  if(SUCCEEDED(result))result=activation;if(SUCCEEDED(result))result=unknown->QueryInterface(__uuidof(IAudioClient),client.put_void());SetEvent(ready.get());return S_OK;
+ }
+};
+winrt::com_ptr<IAudioClient> ProcessClient(DWORD pid,HANDLE stop){
+ AUDIOCLIENT_ACTIVATION_PARAMS params{};params.ActivationType=AUDIOCLIENT_ACTIVATION_TYPE_PROCESS_LOOPBACK;
+ params.ProcessLoopbackParams.TargetProcessId=pid;params.ProcessLoopbackParams.ProcessLoopbackMode=PROCESS_LOOPBACK_MODE_INCLUDE_TARGET_PROCESS_TREE;
+ PROPVARIANT variant{};variant.vt=VT_BLOB;variant.blob.cbSize=sizeof(params);variant.blob.pBlobData=reinterpret_cast<BYTE*>(&params);
+ auto completion=winrt::make_self<Activation>();if(!completion->ready)winrt::throw_last_error();winrt::com_ptr<IActivateAudioInterfaceAsyncOperation> operation;
+ winrt::check_hresult(ActivateAudioInterfaceAsync(VIRTUAL_AUDIO_DEVICE_PROCESS_LOOPBACK,__uuidof(IAudioClient),&variant,completion.get(),operation.put()));
+ HANDLE events[]{stop,completion->ready.get()};DWORD wait=WaitForMultipleObjects(2,events,FALSE,2000);
+ if(wait!=WAIT_OBJECT_0+1)throw winrt::hresult_error(HRESULT_FROM_WIN32(wait==WAIT_TIMEOUT?ERROR_TIMEOUT:ERROR_CANCELLED));
+ winrt::check_hresult(completion->result);return completion->client;
+}
 struct BandFilter {
  double previous=0,hp=0,low1=0,low2=0;
  double Process(double sample,double highPass,double lowPass){
@@ -26,9 +72,11 @@ struct FrequencyBand {
  explicit FrequencyBand(double hz=60){double w=6.283185307179586*hz/48000,alpha=std::sin(w)/(2*1.1),a0=1+alpha;b0=alpha/a0;b2=-b0;a1=-2*std::cos(w)/a0;a2=(1-alpha)/a0;}
  double Process(double x){double y=b0*x+z1;z1=-a1*y+z2;z2=b2*x-a2*y;return y;}
 };
-struct Snapshot {float bands[BandCount]{};float level=0,bass=0,hit=0;HRESULT error=S_OK;uint64_t packets=0;std::chrono::steady_clock::time_point at{};};
+struct Snapshot {float bands[BandCount]{};float level=0,bass=0,hit=0;HRESULT error=S_OK;DWORD process=0;HRESULT fallback=S_OK;uint64_t packets=0;std::chrono::steady_clock::time_point at{};};
 std::mutex gate;Snapshot latest;std::set<HWND> users;std::thread worker;
-HANDLE stopEvent=nullptr,deviceEvent=nullptr;
+HANDLE stopEvent=nullptr,deviceEvent=nullptr;std::atomic<DWORD> desiredTarget{0};
+void SetSource(DWORD pid){if(desiredTarget.exchange(pid)!=pid){std::lock_guard lock(gate);if(deviceEvent)SetEvent(deviceEvent);}}
+
 struct DeviceChanges:winrt::implements<DeviceChanges,IMMNotificationClient>{
  HRESULT __stdcall OnDefaultDeviceChanged(EDataFlow flow,ERole role,LPCWSTR) noexcept override {if(flow==eRender&&role==eMultimedia)SetEvent(deviceEvent);return S_OK;}
  HRESULT __stdcall OnDeviceStateChanged(LPCWSTR,DWORD) noexcept override {return S_OK;}
@@ -43,21 +91,27 @@ void Run(){
  auto notifications=winrt::make_self<DeviceChanges>();winrt::check_hresult(enumerator->RegisterEndpointNotificationCallback(notifications.get()));
  winrt::handle samples{CreateEvent(nullptr,FALSE,FALSE,nullptr)};
  if(!samples)winrt::throw_last_error();
+ DWORD failedPid=0;HRESULT failedReason=S_OK;
  while(WaitForSingleObject(stopEvent,0)!=WAIT_OBJECT_0){
  bool restart=false;
  try{
- winrt::com_ptr<IMMDevice> device;winrt::check_hresult(enumerator->GetDefaultAudioEndpoint(eRender,eMultimedia,device.put()));
- winrt::com_ptr<IAudioClient> client;winrt::check_hresult(device->Activate(__uuidof(IAudioClient),CLSCTX_ALL,nullptr,client.put_void()));
- // Ask the shared audio engine for a fixed float format; no per-packet format conversion/allocations.
- WAVEFORMATEX format{WAVE_FORMAT_IEEE_FLOAT,2,48000,384000,8,32,0};
- winrt::check_hresult(client->Initialize(AUDCLNT_SHAREMODE_SHARED,AUDCLNT_STREAMFLAGS_LOOPBACK|AUDCLNT_STREAMFLAGS_EVENTCALLBACK|AUDCLNT_STREAMFLAGS_AUTOCONVERTPCM|AUDCLNT_STREAMFLAGS_SRC_DEFAULT_QUALITY,0,0,&format,nullptr));
- winrt::check_hresult(client->SetEventHandle(samples.get()));winrt::com_ptr<IAudioCaptureClient> capture;winrt::check_hresult(client->GetService(__uuidof(IAudioCaptureClient),capture.put_void()));
+ DWORD pid=desiredTarget.load();HRESULT fallback=pid==failedPid?failedReason:S_OK;winrt::com_ptr<IAudioClient> client;winrt::com_ptr<IAudioCaptureClient> capture;winrt::handle captureTarget;
+ auto initialize=[&]{WAVEFORMATEX format{WAVE_FORMAT_IEEE_FLOAT,2,48000,384000,8,32,0};
+  winrt::check_hresult(client->Initialize(AUDCLNT_SHAREMODE_SHARED,AUDCLNT_STREAMFLAGS_LOOPBACK|AUDCLNT_STREAMFLAGS_EVENTCALLBACK|AUDCLNT_STREAMFLAGS_AUTOCONVERTPCM,0,0,&format,nullptr));
+  winrt::check_hresult(client->SetEventHandle(samples.get()));winrt::check_hresult(client->GetService(__uuidof(IAudioCaptureClient),capture.put_void()));
+ };
+ if(pid&&pid!=failedPid)try{
+  captureTarget=winrt::handle{OpenProcess(SYNCHRONIZE,FALSE,pid)};if(!captureTarget||WaitForSingleObject(captureTarget.get(),0)!=WAIT_TIMEOUT)throw winrt::hresult_error(HRESULT_FROM_WIN32(ERROR_NOT_FOUND));
+  client=ProcessClient(pid,stopEvent);initialize();
+ }catch(winrt::hresult_error const& e){fallback=e.code();failedReason=e.code();failedPid=pid;client=nullptr;capture=nullptr;captureTarget.close();}
+ if(!client){winrt::com_ptr<IMMDevice> device;winrt::check_hresult(enumerator->GetDefaultAudioEndpoint(eRender,eMultimedia,device.put()));winrt::check_hresult(device->Activate(__uuidof(IAudioClient),CLSCTX_ALL,nullptr,client.put_void()));initialize();}
+ {std::lock_guard lock(gate);latest.process=captureTarget?pid:0;latest.fallback=fallback;latest.error=S_OK;}
  winrt::check_hresult(client->Start());BandFilter filters[2];FrequencyBand bank[2][BandCount];double baseline[BandCount]{};float response[BandCount]{};
  for(auto& channel:bank)for(int band=0;band<BandCount;band++)channel[band]=FrequencyBand(Centers[band]);
  double baselineBass=.005,baselinePeak=.02;
  constexpr double hp=0.99543,lp=0.02177; // 35 Hz high-pass + two 170 Hz low-pass stages at 48 kHz.
- HANDLE events[]{stopEvent,deviceEvent,samples.get()};
- for(;;){DWORD event=WaitForMultipleObjects(3,events,FALSE,INFINITE);if(event==WAIT_OBJECT_0||event==WAIT_OBJECT_0+1){restart=event==WAIT_OBJECT_0+1;break;}if(event!=WAIT_OBJECT_0+2)winrt::throw_last_error();
+ HANDLE events[]{stopEvent,deviceEvent,samples.get(),captureTarget.get()};
+ for(;;){DWORD event=WaitForMultipleObjects(captureTarget?4:3,events,FALSE,INFINITE);if(event==WAIT_OBJECT_0+3){SetSource(0);restart=true;break;}if(event==WAIT_OBJECT_0||event==WAIT_OBJECT_0+1){restart=event==WAIT_OBJECT_0+1;if(restart)failedPid=0;break;}if(event!=WAIT_OBJECT_0+2)winrt::throw_last_error();
  UINT frames=0;winrt::check_hresult(capture->GetNextPacketSize(&frames));
  while(frames){BYTE* bytes=nullptr;DWORD flags=0;winrt::check_hresult(capture->GetBuffer(&bytes,&frames,&flags,nullptr,nullptr));
  double peak=0,energy=0;double bandEnergy[BandCount]{};bool silent=(flags&AUDCLNT_BUFFERFLAGS_SILENT)!=0;
@@ -94,7 +148,7 @@ void Run(){
  }
  }
  client->Stop();
- }catch(winrt::hresult_error const& e){std::lock_guard lock(gate);latest.error=e.code();latest.level=latest.bass=latest.hit=0;for(auto& band:latest.bands)band=0;}
+ }catch(winrt::hresult_error const& e){std::lock_guard lock(gate);latest.error=e.code();if(latest.process){failedPid=latest.process;failedReason=e.code();restart=true;}latest.level=latest.bass=latest.hit=0;for(auto& band:latest.bands)band=0;}
  if(WaitForSingleObject(stopEvent,0)==WAIT_OBJECT_0)break;
  if(restart)continue;
  // Failed endpoints stay idle until a device notification; no retry/poll loop.
@@ -107,10 +161,10 @@ void Run(){
 void Enable(HWND hwnd,bool active){
  // Called only on the UI thread; the gate protects samples, not lifecycle operations.
  if(active){if(!users.insert(hwnd).second)return;if(users.size()>1)return;
- stopEvent=CreateEvent(nullptr,TRUE,FALSE,nullptr);deviceEvent=CreateEvent(nullptr,FALSE,FALSE,nullptr);
+ {std::lock_guard lock(gate);stopEvent=CreateEvent(nullptr,TRUE,FALSE,nullptr);deviceEvent=CreateEvent(nullptr,FALSE,FALSE,nullptr);}
  if(!stopEvent||!deviceEvent){if(stopEvent)CloseHandle(stopEvent);if(deviceEvent)CloseHandle(deviceEvent);users.erase(hwnd);winrt::throw_last_error();}
  {std::lock_guard lock(gate);latest={};}worker=std::thread(Run);
- }else{users.erase(hwnd);if(!users.empty()||!worker.joinable())return;SetEvent(stopEvent);worker.join();CloseHandle(stopEvent);CloseHandle(deviceEvent);stopEvent=deviceEvent=nullptr;}
+ }else{users.erase(hwnd);if(!users.empty()||!worker.joinable())return;SetEvent(stopEvent);worker.join();{std::lock_guard lock(gate);CloseHandle(stopEvent);CloseHandle(deviceEvent);stopEvent=deviceEvent=nullptr;}}
 }
 Snapshot Read(){std::lock_guard lock(gate);auto result=latest;double age=std::chrono::duration<double>(std::chrono::steady_clock::now()-result.at).count();float decay=static_cast<float>(std::exp(-std::max(0.,age-.04)/.12));for(auto& band:result.bands)band*=decay;result.level*=decay;result.bass*=decay;result.hit*=decay;return result;}
 }

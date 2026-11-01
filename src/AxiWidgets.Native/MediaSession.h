@@ -6,7 +6,7 @@
 #include <thread>
 #include <deque>
 using namespace Windows::Media::Control;
-struct MediaSnapshot {wchar_t title[256]{},artist[256]{};double position{},duration{},rate{1};int playing{},available{},controls{};UINT color{0xff70bfff};int error{};};
+struct MediaSnapshot {wchar_t title[256]{},artist[256]{};double position{},duration{},rate{1};int playing{},available{},controls{};UINT color{0xff70bfff};int error{};DWORD process{};};
 namespace Media {
 std::mutex mutex;std::condition_variable wake;std::set<HWND> listeners;std::thread worker;
 bool quit=false,dirty=true,metadata=true;std::deque<std::pair<int,double>> requests;MediaSnapshot snapshot;
@@ -23,14 +23,14 @@ void Run(){
  try{
  auto next=manager.GetCurrentSession();if(next!=session){detach();session=next;art=true;if(session){properties=session.MediaPropertiesChanged([](auto&&,auto&&){Signal(true);});playback=session.PlaybackInfoChanged([](auto&&,auto&&){Signal();});timeline=session.TimelinePropertiesChanged([](auto&&,auto&&){Signal();});}}
  MediaSnapshot value;{std::lock_guard lock(mutex);value=snapshot;}value.error=0;
- if(!session)value=MediaSnapshot{};
+ if(!session){value=MediaSnapshot{};AudioReactive::SetSource(0);}
  else{
  for(auto [action,pos]:commands){bool ok=false;switch(action){case 0:ok=session.TryTogglePlayPauseAsync().get();break;case 1:ok=session.TrySkipPreviousAsync().get();break;case 2:ok=session.TrySkipNextAsync().get();break;case 3:ok=session.TryChangePlaybackPositionAsync(static_cast<int64_t>(pos*10000000)).get();break;}if(!ok)OutputDebugStringW(L"AxiWidgets: media command rejected by session\n");}
  auto info=session.GetPlaybackInfo();auto time=session.GetTimelineProperties();value.available=1;value.playing=info.PlaybackStatus()==GlobalSystemMediaTransportControlsSessionPlaybackStatus::Playing;
  value.position=time.Position().count()/10000000.;value.duration=time.EndTime().count()/10000000.;value.rate=info.PlaybackRate()?info.PlaybackRate().Value():1;
  if(value.playing)value.position+=std::max(0.,(winrt::clock::now()-time.LastUpdatedTime()).count()/10000000.)*value.rate;
  auto c=info.Controls();value.controls=(c.IsPlayPauseToggleEnabled()?1:0)|(c.IsPreviousEnabled()?2:0)|(c.IsNextEnabled()?4:0)|(c.IsPlaybackPositionEnabled()?8:0);
- if(art){auto p=session.TryGetMediaPropertiesAsync().get();wcsncpy_s(value.title,p.Title().c_str(),_TRUNCATE);wcsncpy_s(value.artist,p.Artist().c_str(),_TRUNCATE);
+ if(art){value.process=AudioReactive::ResolveSource(session.SourceAppUserModelId().c_str());AudioReactive::SetSource(value.process);auto p=session.TryGetMediaPropertiesAsync().get();wcsncpy_s(value.title,p.Title().c_str(),_TRUNCATE);wcsncpy_s(value.artist,p.Artist().c_str(),_TRUNCATE);
  DWORD accent=0;BOOL opaque=false;DwmGetColorizationColor(&accent,&opaque);value.color=0xff000000|(accent&0xffffff);
  try{if(p.Thumbnail()){auto stream=p.Thumbnail().OpenReadAsync().get();auto decoder=Windows::Graphics::Imaging::BitmapDecoder::CreateAsync(stream).get();Windows::Graphics::Imaging::BitmapTransform transform;transform.ScaledWidth(32);transform.ScaledHeight(32);
  auto data=decoder.GetPixelDataAsync(Windows::Graphics::Imaging::BitmapPixelFormat::Rgba8,Windows::Graphics::Imaging::BitmapAlphaMode::Straight,transform,Windows::Graphics::Imaging::ExifOrientationMode::IgnoreExifOrientation,Windows::Graphics::Imaging::ColorManagementMode::DoNotColorManage).get().DetachPixelData();

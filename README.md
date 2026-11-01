@@ -12,7 +12,7 @@ A C# / .NET 10 / WPF manager hosts C++/WinRT Windows Composition cards in one pr
 
 ## Install
 
-Download `AxiWidgets-Setup-0.3.1-x64.exe` from [Releases](https://github.com/Axilium1749/AxiWidgets/releases/latest) and run it. The installer includes .NET, installs for the current user without elevation, and offers optional autostart. Use the tray icon to open the gallery or exit. The installer is currently unsigned.
+Download `AxiWidgets-Setup-0.3.2-x64.exe` from [Releases](https://github.com/Axilium1749/AxiWidgets/releases/latest) and run it. The installer includes .NET, installs for the current user without elevation, and offers optional autostart. Use the tray icon to open the gallery or exit. The installer is currently unsigned.
 
 ## Requirements
 
@@ -50,7 +50,7 @@ Close an existing instance first; the manager allows only one instance. The inst
 
 ## Installer and autostart
 
-Run `./scripts/Build-Installer.ps1` after bootstrap. It creates `artifacts/installer/AxiWidgets-Setup-0.3.1-x64.exe` with the .NET 10.0.14 runtime included. The first publish downloads pinned runtime packs from NuGet; the Inno Setup compiler is downloaded with a verified SHA-256 and prepared in portable mode under `.tools/inno`. The compiler version/hash is in `installer/compiler.lock.json`.
+Run `./scripts/Build-Installer.ps1` after bootstrap. It creates `artifacts/installer/AxiWidgets-Setup-0.3.2-x64.exe` with the .NET 10.0.14 runtime included. The first publish downloads pinned runtime packs from NuGet; the Inno Setup compiler is downloaded with a verified SHA-256 and prepared in portable mode under `.tools/inno`. The compiler version/hash is in `installer/compiler.lock.json`.
 
 Installation is per user under `%LOCALAPPDATA%\Programs\AxiWidgets`, without administrator rights. The wizard offers a desktop shortcut and autostart, both optional. The Start menu shortcut and Windows uninstall entry are included. Run the new installer directly over an existing installation; uninstalling first is not required. It keeps the existing installation directory and asks the running app to save and exit. Layout, reminders and SSH connections remain in the separate user data directory. Uninstall removes the program, shortcuts and its autostart registration, while preserving user data. The current installer is unsigned.
 
@@ -60,7 +60,7 @@ Right-click the tray icon and check **Автозапуск** to enable launch on
 
 - Launching the application restores desktop widgets and the tray icon without opening the gallery. Left-click the tray icon to open the widget gallery. Right-click for the styled gallery/Exit menu.
 - Choose Clock, Calendar, Reminders, System, SSH or Media Player. Each preview creates an independent widget.
-- Media Player controls the current Windows media session (no account sign-in). Supported buttons and seeking depend on the source app. Its procedural ring uses 30 samples/second, interpolated by Composition; a shared event-driven WASAPI loopback measures volume and six independently normalized frequency bands (60 Hz–8 kHz), without FFT or audio storage. Only visible, playing cards enable it; system output from other apps can also influence the ring. Artwork accents are extracted from a 32×32 thumbnail and cached (32 entries). Paused/hidden cards stop periodic UI updates.
+- Media Player controls the current Windows media session (no account sign-in). Supported buttons and seeking depend on the source app. Its procedural ring uses 30 samples/second, interpolated by Composition; a shared event-driven WASAPI loopback measures volume and six independently normalized frequency bands (60 Hz–8 kHz), without FFT or audio storage. Only visible, playing cards enable it. When the media application can be identified, capture includes only its process tree (all tabs for a browser). Ambiguous/unavailable sources or failed process capture fall back to the default system output; diagnostics record the selected PID and fallback HRESULT. Artwork accents are extracted from a 32×32 thumbnail and cached (32 entries). Paused/hidden cards stop periodic UI updates.
 - Opening the gallery enables layout editing. Drag widgets to snap to display edges, centers and neighboring cards. Right-click a widget for its settings or removal.
 - Done closes the gallery, locks widget positions and saves the layout. The gallery is a fixed topmost tool window; outside clicks and Alt+F4 do not dismiss it. Exit in the tray menu closes the entire application.
 - Clocks offer date and seconds toggles and update at displayed time boundaries.

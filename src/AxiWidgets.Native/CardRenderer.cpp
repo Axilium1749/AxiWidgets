@@ -2,6 +2,13 @@
 #include <mmdeviceapi.h>
 #include <audioclient.h>
 #include <ksmedia.h>
+#include <audioclientactivationparams.h>
+#include <tlhelp32.h>
+#include <appmodel.h>
+#include <atomic>
+#include <shobjidl.h>
+#include <shellapi.h>
+#include <propkey.h>
 #include <dwmapi.h>
 #include <dispatcherqueue.h>
 #include <windows.ui.composition.interop.h>
@@ -405,9 +412,9 @@ extern "C" __declspec(dllexport) HRESULT __cdecl AxiMedia_Timeline(HWND hwnd,Dra
  });
 }
 
-struct AudioLevels {float level,bass,hit;HRESULT error;uint64_t packets;};
+struct AudioLevels {float level,bass,hit;HRESULT error;uint64_t packets;DWORD process;HRESULT fallback;};
 extern "C" __declspec(dllexport) HRESULT __cdecl AxiMedia_AudioPulse(HWND hwnd,AudioLevels* result) noexcept {
- return Guard([&]{auto& card=GetCard(hwnd);auto sample=AudioReactive::Read();if(result)*result={sample.level,sample.bass,sample.hit,sample.error,sample.packets};
+ return Guard([&]{auto& card=GetCard(hwnd);auto sample=AudioReactive::Read();if(result)*result={sample.level,sample.bass,sample.hit,sample.error,sample.packets,sample.process,sample.fallback};
  if(!card.mediaActive||!card.mediaEnvelope)return;
  card.mediaAudioTween.InsertKeyFrame(1,{sample.level,sample.bass,sample.hit},card.mediaAudioLinear);card.mediaEnvelope.StartAnimation(L"Signal",card.mediaAudioTween);
  card.mediaAudioTween.InsertKeyFrame(1,{sample.bands[0],sample.bands[1],sample.bands[2]},card.mediaAudioLinear);card.mediaEnvelope.StartAnimation(L"BandsA",card.mediaAudioTween);
