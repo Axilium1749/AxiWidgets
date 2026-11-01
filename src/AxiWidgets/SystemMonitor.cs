@@ -21,8 +21,8 @@ internal static class SystemMonitor
             while(!token.IsCancellationRequested){
                 var sample=await Task.Run(()=>{NativeCard.Check(SystemMetricsNative.Read(handle,out var value));return value;});
                 if(token.IsCancellationRequested)break;
-                Current=sample;CpuHistory.Add(sample.Cpu);if(CpuHistory.Count>30)CpuHistory.RemoveAt(0);changed?.Invoke();
-                await Task.Delay(2000,token);
+                Current=sample;CpuHistory.Add(sample.Cpu);if(CpuHistory.Count>31)CpuHistory.RemoveAt(0);changed?.Invoke();
+                await Task.Delay(1000,token);
             }
         }catch(OperationCanceledException){}catch(Exception e){Log.Write("System metrics failed: "+e);}
         finally{if(handle!=0)await Task.Run(()=>SystemMetricsNative.Destroy(handle));}

@@ -14,6 +14,7 @@
 #include <windows.ui.composition.interop.h>
 #include <windows.graphics.effects.interop.h>
 #include <d2d1effects.h>
+#include <windows.graphics.interop.h>
 #include <d2d1_1.h>
 #include <d3d11.h>
 #include <dwrite.h>
@@ -61,6 +62,14 @@ struct BlurEffect : implements<BlurEffect,IGraphicsEffect,IGraphicsEffectSource,
     HRESULT __stdcall GetSource(UINT index,ABI::Windows::Graphics::Effects::IGraphicsEffectSource** result) noexcept override {
         if(index)return E_INVALIDARG;*result=reinterpret_cast<ABI::Windows::Graphics::Effects::IGraphicsEffectSource*>(detach_abi(IGraphicsEffectSource(source)));return S_OK;
     }
+};
+
+// Retained D2D path gives the compositor an exact clockwise 270-degree arc.
+struct GaugePath : implements<GaugePath,Windows::Graphics::IGeometrySource2D,ABI::Windows::Graphics::IGeometrySource2DInterop> {
+    com_ptr<ID2D1PathGeometry> path;
+    explicit GaugePath(com_ptr<ID2D1PathGeometry> value):path(std::move(value)){}
+    HRESULT __stdcall GetGeometry(ID2D1Geometry** value) noexcept override {return path->QueryInterface(__uuidof(ID2D1Geometry),reinterpret_cast<void**>(value));}
+    HRESULT __stdcall TryGetGeometryUsingFactory(ID2D1Factory*,ID2D1Geometry** value) noexcept override {*value=nullptr;return S_OK;}
 };
 
 struct DrawCommand {int kind;float x,y,w,h,r,size;UINT color;int align;wchar_t text[256];};
@@ -127,7 +136,48 @@ struct Card
     SpriteVisual mediaProgress{nullptr},mediaThumb{nullptr};
     SpriteVisual mediaFeedback{nullptr};int mediaFeedbackId=-2,mediaFeedbackPressed=-1;bool mediaActive=false;UINT mediaColor=0,mediaPaletteSeed=1;
     double mediaProgressFraction=-1,mediaProgressSpeed=0;std::chrono::steady_clock::time_point mediaProgressAt{};
+    struct Gauge {CompositionPathGeometry geometry{nullptr};float target=-1;};
+    std::map<int,Gauge> systemGauges;
+    SpriteVisual systemVram{nullptr},systemGraph{nullptr};float systemVramTarget=-1,systemGraphDpi=0;
+    CompositionDrawingSurface systemGraphSurface{nullptr};std::vector<DrawCommand> systemGraphCommands;
     std::wstring time,date;
+    void SystemGauge(DrawCommand const& cmd){
+        auto c=renderer->compositor;auto& gauge=systemGauges[static_cast<int>(cmd.x)];bool fresh=!gauge.geometry;
+        float value=std::clamp(cmd.h/100.f,0.f,1.f);
+        if(fresh){
+            com_ptr<ID2D1PathGeometry> path;check_hresult(renderer->factory->CreatePathGeometry(path.put()));
+            com_ptr<ID2D1GeometrySink> sink;check_hresult(path->Open(sink.put()));
+            constexpr float diagonal=.70710678118f;
+            sink->BeginFigure({cmd.x-cmd.w*diagonal,cmd.y+cmd.w*diagonal},D2D1_FIGURE_BEGIN_HOLLOW);
+            sink->AddArc(D2D1::ArcSegment({cmd.x+cmd.w*diagonal,cmd.y+cmd.w*diagonal},{cmd.w,cmd.w},0,D2D1_SWEEP_DIRECTION_CLOCKWISE,D2D1_ARC_SIZE_LARGE));
+            sink->EndFigure(D2D1_FIGURE_END_OPEN);check_hresult(sink->Close());
+            gauge.geometry=c.CreatePathGeometry();gauge.geometry.Path(CompositionPath(make<GaugePath>(path)));gauge.geometry.TrimEnd(value);
+            auto shape=c.CreateSpriteShape(gauge.geometry);shape.StrokeThickness(cmd.size);shape.StrokeStartCap(CompositionStrokeCap::Round);shape.StrokeEndCap(CompositionStrokeCap::Round);
+            shape.StrokeBrush(c.CreateColorBrush({static_cast<BYTE>(cmd.color>>24),static_cast<BYTE>(cmd.color>>16),static_cast<BYTE>(cmd.color>>8),static_cast<BYTE>(cmd.color)}));
+            auto visual=c.CreateShapeVisual();visual.Size({width,height});visual.Shapes().Append(shape);root.Children().InsertAbove(visual,textVisual);
+        }else if(gauge.target!=value){
+            auto a=c.CreateScalarKeyFrameAnimation();a.Duration(std::chrono::milliseconds(600));a.InsertExpressionKeyFrame(0,L"this.StartingValue");a.InsertKeyFrame(1,value,c.CreateCubicBezierEasingFunction({.25f,.1f},{.25f,1.f}));gauge.geometry.StartAnimation(L"TrimEnd",a);
+        }
+        gauge.target=value;
+    }
+    void SystemVram(DrawCommand const& cmd){
+        if(!systemVram){auto c=renderer->compositor;systemVram=c.CreateSpriteVisual();systemVram.Size({cmd.w,cmd.h});systemVram.Offset({cmd.x,cmd.y,0});
+            systemVram.Brush(c.CreateColorBrush({255,255,85,98}));auto clip=c.CreateRectangleClip();clip.Right(cmd.w);clip.Bottom(cmd.h);auto right=c.CreateExpressionAnimation(L"bar.Size.X");right.SetReferenceParameter(L"bar",systemVram);clip.StartAnimation(L"Right",right);clip.TopLeftRadius({cmd.r,cmd.r});clip.TopRightRadius({cmd.r,cmd.r});clip.BottomLeftRadius({cmd.r,cmd.r});clip.BottomRightRadius({cmd.r,cmd.r});systemVram.Clip(clip);root.Children().InsertAbove(systemVram,textVisual);
+        }else if(systemVramTarget!=cmd.w)Animate(systemVram,L"Size.X",cmd.w,600);
+        systemVramTarget=cmd.w;
+    }
+    void SystemGraph(std::vector<DrawCommand> content,DrawCommand const& bounds){
+        bool changed=content.size()!=systemGraphCommands.size();
+        if(!changed)for(size_t i=0;i<content.size();i++)if(content[i].y!=systemGraphCommands[i].y||content[i].h!=systemGraphCommands[i].h||content[i].x!=systemGraphCommands[i].x){changed=true;break;}
+        bool fresh=!systemGraph||systemGraphDpi!=scale;
+        if(!changed&&!fresh)return;
+        auto c=renderer->compositor;
+        if(!systemGraph){auto viewportVisual=c.CreateContainerVisual();viewportVisual.Size({width,height});auto clip=c.CreateRectangleClip();clip.Left(bounds.x);clip.Top(bounds.y);clip.Right(bounds.x+bounds.w);clip.Bottom(bounds.y+bounds.h);viewportVisual.Clip(clip);root.Children().InsertAbove(viewportVisual,textVisual);systemGraph=c.CreateSpriteVisual();systemGraph.Size({width,height});viewportVisual.Children().InsertAtTop(systemGraph);}
+        if(fresh){systemGraphDpi=scale;systemGraphSurface=renderer->graphics.CreateDrawingSurface({width*scale,height*scale},Windows::Graphics::DirectX::DirectXPixelFormat::B8G8R8A8UIntNormalized,Windows::Graphics::DirectX::DirectXAlphaMode::Premultiplied);systemGraph.Brush(c.CreateSurfaceBrush(systemGraphSurface));}
+        systemGraphCommands=content;auto savedSurface=surface;auto savedCommands=std::move(commands);surface=systemGraphSurface;commands=std::move(content);
+        try{Draw();}catch(...){surface=savedSurface;commands=std::move(savedCommands);throw;}surface=savedSurface;commands=std::move(savedCommands);
+        systemGraph.StopAnimation(L"Offset.X");systemGraph.Offset({fresh?0.f:95.f/29,0,0});if(!fresh)Animate(systemGraph,L"Offset.X",0,600);
+    }
     void Animate(Visual const& visual,wchar_t const* property,float value,int duration){
         auto animation=renderer->compositor.CreateScalarKeyFrameAnimation();
         animation.Duration(std::chrono::milliseconds(duration));
@@ -139,6 +189,9 @@ struct Card
         std::vector<DrawCommand> background;std::set<std::wstring> active;
         for(size_t i=0;i<incoming.size();i++){
             auto const& cmd=incoming[i];
+            if(cmd.kind==11){SystemGauge(cmd);continue;}
+            if(cmd.kind==12){SystemVram(cmd);continue;}
+            if(cmd.kind==14){std::vector<DrawCommand> graph;while(++i<incoming.size()&&incoming[i].kind!=15)graph.push_back(incoming[i]);SystemGraph(std::move(graph),cmd);continue;}
             if(cmd.kind==6){
                 if(!viewport){
                     auto c=renderer->compositor;viewport=c.CreateContainerVisual();viewport.Size({width,height});

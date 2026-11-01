@@ -104,7 +104,7 @@ internal sealed partial class ClockWindow
         timer.Stop();if(State.Kind=="Media"){MediaRefresh();return;}var now=DateTime.Now;
         if(State.Kind!="Clock") {
             if(IsList)ResizeScroll();
-            var drawing=State.Kind=="SSH"?WidgetDrawing.Ssh(manager.Ssh.Store.Items,manager.Ssh.Latency,scroll):State.Kind=="System"?WidgetDrawing.SystemCard(SystemMonitor.Current,SystemMonitor.CpuHistory):State.Kind=="Calendar"?WidgetDrawing.Calendar(now):DrawReminders();
+            var drawing=State.Kind=="SSH"?WidgetDrawing.Ssh(manager.Ssh.Store.Items,manager.Ssh.Latency,scroll):State.Kind=="System"?WidgetDrawing.SystemCard(SystemMonitor.Current,SystemMonitor.CpuHistory,animated:true):State.Kind=="Calendar"?WidgetDrawing.Calendar(now):DrawReminders();
             NativeCard.Check(NativeCard.SetContent(Handle,drawing.Commands.ToArray(),drawing.Commands.Count));
             if(State.Kind=="Calendar"){timer.Interval=new DateTimeOffset(now.Date.AddDays(1))-new DateTimeOffset(now);timer.Start();}return;
         }

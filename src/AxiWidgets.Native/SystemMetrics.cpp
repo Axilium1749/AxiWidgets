@@ -17,7 +17,7 @@ struct Metrics { double cpu,ghz,ramUsed,ramTotal,gpu,vramUsed,vramTotal,down,up;
 struct Monitor {
     PDH_HQUERY query{}; PDH_HCOUNTER engine{},memory{},performance{};
     Metrics info{}; std::wstring luid;
-    ULONGLONG idle{},total{},tick{};
+    ULONGLONG idle{},total{},tick{}; double lastDown=-1,lastUp=-1;
     std::map<ULONG64,std::pair<ULONG64,ULONG64>> network;
     Monitor(){
         int regs[4]{}; char brand[49]{}; __cpuid(regs,static_cast<int>(0x80000000));
@@ -46,8 +46,8 @@ struct Monitor {
         struct Power {ULONG number,max,current,limit,maxIdle,currentIdle;};SYSTEM_INFO si{};GetSystemInfo(&si);std::vector<Power> power(si.dwNumberOfProcessors);if(!CallNtPowerInformation(ProcessorInformation,nullptr,0,power.data(),static_cast<ULONG>(power.size()*sizeof(Power)))){double sum=0;for(auto p:power)sum+=p.current;if(!power.empty())m.ghz=sum/power.size()/1000.0;}
         MEMORYSTATUSEX mem{};mem.dwLength=sizeof(mem);if(GlobalMemoryStatusEx(&mem)){m.ramTotal=static_cast<double>(mem.ullTotalPhys);m.ramUsed=static_cast<double>(mem.ullTotalPhys-mem.ullAvailPhys);}
         if(query&&PdhCollectQueryData(query)==ERROR_SUCCESS){PDH_FMT_COUNTERVALUE perf{};if(performance&&PdhGetFormattedCounterValue(performance,PDH_FMT_DOUBLE|PDH_FMT_NOCAP100,nullptr,&perf)==ERROR_SUCCESS&&perf.CStatus<=1&&!power.empty())m.ghz=power[0].max/1000.0*perf.doubleValue/100.0;std::map<std::wstring,double> engines;if(Values(engine,[&](auto name,double v){auto p=name.find(L"_eng_");if(p!=std::wstring::npos)engines[name.substr(p)]+=v;})){m.gpu=0;for(auto const& e:engines)m.gpu=std::max(m.gpu,e.second);m.gpu=std::clamp(m.gpu,0.0,100.0);}double used=0;if(Values(memory,[&](auto,double v){used+=v;}))m.vramUsed=used;}
-        auto now=GetTickCount64();PMIB_IF_TABLE2 table{};if(GetIfTable2(&table)==NO_ERROR){double down=0,up=0;std::map<ULONG64,std::pair<ULONG64,ULONG64>> next;
-            for(ULONG i=0;i<table->NumEntries;i++){auto const& r=table->Table[i];if(r.OperStatus!=IfOperStatusUp||!r.InterfaceAndOperStatusFlags.HardwareInterface)continue;auto id=r.InterfaceLuid.Value;auto old=network.find(id);if(old!=network.end()&&r.InOctets>=old->second.first&&r.OutOctets>=old->second.second){down+=static_cast<double>(r.InOctets-old->second.first);up+=static_cast<double>(r.OutOctets-old->second.second);}next[id]={r.InOctets,r.OutOctets};}FreeMibTable(table);network=std::move(next);if(tick&&now>tick){m.down=down*1000/(now-tick);m.up=up*1000/(now-tick);}tick=now;}
+        auto now=GetTickCount64();m.down=lastDown;m.up=lastUp;PMIB_IF_TABLE2 table{};if((!tick||now-tick>=1000)&&GetIfTable2(&table)==NO_ERROR){double down=0,up=0;std::map<ULONG64,std::pair<ULONG64,ULONG64>> next;
+            for(ULONG i=0;i<table->NumEntries;i++){auto const& r=table->Table[i];if(r.OperStatus!=IfOperStatusUp||!r.InterfaceAndOperStatusFlags.HardwareInterface)continue;auto id=r.InterfaceLuid.Value;auto old=network.find(id);if(old!=network.end()&&r.InOctets>=old->second.first&&r.OutOctets>=old->second.second){down+=static_cast<double>(r.InOctets-old->second.first);up+=static_cast<double>(r.OutOctets-old->second.second);}next[id]={r.InOctets,r.OutOctets};}FreeMibTable(table);network=std::move(next);if(tick&&now>tick){m.down=down*1000/(now-tick);m.up=up*1000/(now-tick);}lastDown=m.down;lastUp=m.up;tick=now;}
     }
 };
 extern "C" __declspec(dllexport) HRESULT __cdecl AxiMetrics_Create(Monitor** result) noexcept {try{*result=new Monitor;return S_OK;}catch(...){return E_FAIL;}}
